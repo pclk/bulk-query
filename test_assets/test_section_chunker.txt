@@ -1,0 +1,208 @@
+{
+  "chunks": [
+    {
+      "start": "Chapter 1: Introduction to Linux 1. The Foundation:",
+      "end": "I/O Devices: How the computer interacts with",
+      "lines": [1, 8],
+      "ctx": null
+    },
+    {
+      "start": "Software: The \"intelligence.\" These are the coded",
+      "end": "Collection of Software: The tools and programs",
+      "lines": [9, 16],
+      "ctx": "Building on hardware fundamentals, this section introduces the Operating System and its core component, the kernel."
+    },
+    {
+      "start": "3. The UNIX Philosophy (1969) UNIX was",
+      "end": "Developer-Friendly: It included the very programs needed",
+      "lines": [17, 26],
+      "ctx": null
+    },
+    {
+      "start": "4. The Birth of GNU/Linux The Linux",
+      "end": "The Result: GNU/Linux. A fully open-source operating",
+      "lines": [27, 35],
+      "ctx": "Following UNIX's modular philosophy, this section explains how modern Linux emerged from two separate open-source projects."
+    },
+    {
+      "start": "5. User Interfaces: The Power of Text",
+      "end": "having a conversation with a chef. 💡 Summary",
+      "lines": [36, 57],
+      "ctx": "This section explores why text-based command line interfaces (CLI) remain powerful despite graphical alternatives."
+    },
+    {
+      "start": "Hardware is the body; Software is the",
+      "end": "flexibility of language to control a machine.",
+      "lines": [58, 64],
+      "ctx": "Summary of Chapter 1's key concepts about Linux fundamentals, from hardware/software distinction to CLI advantages."
+    },
+    {
+      "start": "Chapter 2: CLI Basics 1. The Anatomy",
+      "end": "They act as \"switches\" to toggle features.",
+      "lines": [65, 73],
+      "ctx": null
+    },
+    {
+      "start": "2. Built-ins vs. Programs Not every command",
+      "end": "it is likely a shell built-in. 3.",
+      "lines": [74, 82],
+      "ctx": "Commands in the CLI are either external programs or shell built-ins; the 'which' command helps distinguish them."
+    },
+    {
+      "start": "The Three Standard Streams Every program has",
+      "end": "to tell them apart (demultiplexing). 4.",
+      "lines": [83, 91],
+      "ctx": "Every CLI program uses three data streams: stdin (input), stdout (normal output), and stderr (error messages)."
+    },
+    {
+      "start": "Redirection Operators You can override the shell's",
+      "end": "running them one after another. 5.",
+      "lines": [92, 107],
+      "ctx": "Building on standard streams, redirection operators control where input comes from and where output goes."
+    },
+    {
+      "start": "The Pipe (|) The pipe is the",
+      "end": "is piped into it. 6. Interactive Programs",
+      "lines": [108, 115],
+      "ctx": "The pipe operator embodies UNIX philosophy by connecting stdout of one program to stdin of another."
+    },
+    {
+      "start": "& Signals Some programs (like man or",
+      "end": "allowing the program to finish execution and",
+      "lines": [116, 123],
+      "ctx": "Some CLI programs are interactive, blocking the shell until they finish; Ctrl-D signals end-of-input."
+    },
+    {
+      "start": "return you to the shell. 💡 Summary",
+      "end": "say \"I'm done talking\" to an interactive",
+      "lines": [124, 130],
+      "ctx": "Summary of Chapter 2's CLI basics: arguments, flags, redirection, pipes, and control signals."
+    },
+    {
+      "start": "Chapter 3: CLI Advanced 1. Package Management",
+      "end": "all packages currently present on the system.",
+      "lines": [131, 139],
+      "ctx": null
+    },
+    {
+      "start": "2. Processes and Signals A Process is",
+      "end": "and cannot be ignored. 3. Job Control",
+      "lines": [140, 154],
+      "ctx": "After package management, this section covers how Linux manages running programs through processes and signals."
+    },
+    {
+      "start": "A Job is a process started by",
+      "end": "starts it in the background immediately. Warning:",
+      "lines": [155, 174],
+      "ctx": "Jobs are shell-managed processes; various signals and commands control whether they run in foreground or background."
+    },
+    {
+      "start": "Running a job in the background without",
+      "end": "being \"streamed\" over your terminal, making it",
+      "lines": [175, 177],
+      "ctx": "Background jobs without output redirection can clutter the terminal by printing to the screen."
+    },
+    {
+      "start": "4. Exit Codes & Logical Operators Every",
+      "end": "Example: cd folder || echo \"Folder does",
+      "lines": [178, 189],
+      "ctx": "Commands return exit codes (0=success, non-zero=error); logical operators && and || enable conditional command execution."
+    },
+    {
+      "start": "5. System Monitoring Tools to check your",
+      "end": "or directory occupies. 💡 Summary Memory Aid",
+      "lines": [190, 196],
+      "ctx": "Tools for monitoring system resources like RAM (free), CPU (top), and disk usage (du)."
+    },
+    {
+      "start": "update finds the menu; install buys the",
+      "end": "is \"Then\"; || is \"Else\". Chapter 4:",
+      "lines": [197, 202],
+      "ctx": "Summary of Chapter 3's advanced CLI concepts: package management, processes, job control, exit codes, and system monitoring."
+    },
+    {
+      "start": "Chapter 4: Users, Groups, and Permissions 1.",
+      "end": "to log in as another user.",
+      "lines": [203, 215],
+      "ctx": null
+    },
+    {
+      "start": "2. Root and Privileged Access Root is",
+      "end": "password (if the user has sudo rights).",
+      "lines": [216, 227],
+      "ctx": "Building on user management, the root user (UID 0) has absolute system privileges; sudo allows authorized users to execute commands as root."
+    },
+    {
+      "start": "3. Groups and Collaboration Groups allow you",
+      "end": "groupadd / groupdel: Used to create or",
+      "lines": [228, 235],
+      "ctx": "Users can belong to groups (one primary, multiple secondary) to share permissions; groups are managed with groupadd/groupdel commands."
+    },
+    {
+      "start": "4. Identity Files Linux uses simple text",
+      "end": "GID, and the list of member users.",
+      "lines": [236, 242],
+      "ctx": "User and group information is stored in text files: /etc/passwd defines users, /etc/group defines groups."
+    },
+    {
+      "start": "5. File Permissions (rwx) Permissions are divided",
+      "end": "Group, and Others. The Math of Permissions",
+      "lines": [243, 245],
+      "ctx": "Linux file permissions control access for three categories: owner, group, and others, using read/write/execute flags."
+    },
+    {
+      "start": "(Octal) Permissions use a binary-based numbering system.",
+      "end": "can change who owns a file. 6.",
+      "lines": [246, 263],
+      "ctx": "Permissions use octal notation where r=4, w=2, x=1; chmod changes permissions, chown changes ownership (root-only)."
+    },
+    {
+      "start": "Directory Permissions Permissions behave differently for directories",
+      "end": "because you can't modify what you can't",
+      "lines": [264, 280],
+      "ctx": "For directories, permissions have different meanings: r lists contents, w creates/deletes files, x allows entry (cd)."
+    },
+    {
+      "start": "💡 Summary Memory Aid Root (UID 0)",
+      "end": "to see what's in the room.",
+      "lines": [281, 287],
+      "ctx": "Summary of Chapter 4's concepts: root privileges, user/group files, octal permissions, and directory-specific permission behaviors."
+    },
+    {
+      "start": "Chapter 5: Files 1. Executables and Sensitive",
+      "end": "highly protected file that stores encrypted user",
+      "lines": [288, 292],
+      "ctx": null
+    },
+    {
+      "start": "2. Task Scheduling with Cron Cron is",
+      "end": "in the minute field means every 10",
+      "lines": [293, 313],
+      "ctx": "Cron schedules automated tasks using five time fields (minute, hour, day, month, weekday) plus a command."
+    },
+    {
+      "start": "3. Services and systemd A Service (or",
+      "end": "or check the status of services. 4.",
+      "lines": [314, 323],
+      "ctx": "Services (daemons) run continuously in the background; systemd (PID 1) manages them via .service files and systemctl commands."
+    },
+    {
+      "start": "Archiving and Compression with tar Archiving bundles",
+      "end": "Gzip File). 5. The \"Everything is a",
+      "lines": [324, 352],
+      "ctx": "The tar utility archives multiple files into one, optionally compressing with gzip/bzip2/xz; flags control creation, extraction, and compression type."
+    },
+    {
+      "start": "File\" Philosophy Linux exposes hardware and system",
+      "end": "Created using the ln -s command.",
+      "lines": [353, 374],
+      "ctx": "Linux treats hardware and system info as files; /proc contains process info, /dev contains device files (block/character), and symlinks act as shortcuts."
+    },
+    {
+      "start": "💡 Summary Memory Aid Cron fields: \"Big",
+      "end": "(c) is for streams.",
+      "lines": [375, 381],
+      "ctx": "Summary of Chapter 5: cron syntax, systemd service management, tar archiving, and Linux's file-based system representation philosophy."
+    }
+  ]
+}

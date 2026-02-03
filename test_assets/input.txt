@@ -1,0 +1,383 @@
+Chapter 1: Intro to Linux
+Chapter 1: Introduction to Linux
+1. The Foundation: Hardware vs. Software
+Every computer is built upon two fundamental pillars:
+
+Hardware: The physical "body" and internal fuel.
+Resources: CPU (the brain), Memory/RAM (short-term fuel), and Disk (long-term storage).
+I/O Devices: How the computer interacts with the world (keyboards, screens, sensors).
+Software: The "intelligence." These are the coded features that tell the hardware what to do (e.g., a calculator’s ability to remember a previous sum).
+2. The OS and the Kernel
+An Operating System (OS) is the complete package that defines a computer's behavior. It consists of two parts:
+
+The Kernel: The "Manager." It is the core software that bridges the gap between hardware and software, ensuring resources are distributed fairly.
+Collection of Software: The tools and programs that enable specific features for the user.
+
+
+3. The UNIX Philosophy (1969)
+UNIX was created to modernize computing by making systems simpler and more portable. It introduced a modular approach:
+
+Small & Composable: Instead of one giant, clunky program, UNIX uses small tools that do one thing well.
+The LEGO Effect: These tools are designed to be plugged into one another to solve complex problems.
+Developer-Friendly: It included the very programs needed to build new programs, making it a self-sustaining ecosystem.
+
+
+4. The Birth of GNU/Linux
+The Linux we use today is actually a combination of two separate projects:
+
+GNU Project: An ambitious movement to rewrite UNIX-style tools from scratch as "Open Source" (free to view, edit, and share). They had the tools, but lacked a Kernel.
+Linux: Created by Linus Torvalds, this was the missing piece—an open-source, UNIX-like kernel.
+The Result: GNU/Linux. A fully open-source operating system where the "engine" (Linux) runs the "tools" (GNU).
+
+
+5. User Interfaces: The Power of Text
+A User Interface (UI) is simply how a human interacts with a machine.
+
+Fixed Interfaces: An oven has a dial. It can only do what the dial allows.
+Flexible Interfaces: A typewriter uses text. Text is versatile because the combinations of words are infinite.
+The Evolution of the CLI
+In the early days, users controlled computers via Teletypes (text-based input and output). While modern computers use visual displays, the logic remains:
+
+The CLI (Command Line Interface): A "text engine" that translates typed commands into powerful actions.
+Terminal Emulators/Shells: These are modern programs that "pretend" to be old-time teletypes.
+
+Why do we still use it? Unlike clicking a button (which does one specific thing), text allows for "flexible and ever-expanding usage." It is the difference between choosing a meal from a fixed menu and having a conversation with a chef.
+
+
+💡 Summary Memory Aid
+Hardware is the body; Software is the mind.
+The Kernel is the manager; the OS is the whole office.
+UNIX is the ancestor that taught us to keep tools small and modular.
+GNU (Tools) + Linux (Kernel) = The Open Source OS.
+The CLI is not "old"—it is a high-precision tool that uses the infinite flexibility of language to control a machine.
+
+Chapter 2: CLI Basics
+1. The Anatomy of a Command
+In a terminal, the Prompt usually looks like this: user@host_name ~/Current_Directory $
+
+When you type a command, it follows this structure: command [argument]  (Example: echo hello)
+
+Command: The action or program to run (echo).
+Argument: Parameters passed to the program to control its behavior (hello).
+Flags: A specific type of argument starting with a hyphen (e.g., -h). They act as "switches" to toggle features.
+
+
+2. Built-ins vs. Programs
+Not every command you type is a separate file on the disk.
+
+External Programs: Separate files stored in the system.
+Shell Built-ins: Commands implemented directly inside the shell (e.g., help, exit, alias).
+The which Test: If you run which [command] and it returns no path, it is likely a shell built-in.
+
+
+3. The Three Standard Streams
+Every program has three "pipes" or sequences of data:
+
+stdin (Standard Input): Data flowing into the program.
+stdout (Standard Output): The "normal" data flowing out.
+stderr (Standard Error): Error messages flowing out.
+
+Note: On your screen, stdout and stderr look identical. Redirection is the only way to tell them apart (demultiplexing).
+
+
+4. Redirection Operators
+You can override the shell’s default behavior (printing to screen) by using operators:
+
+Operator
+Action
+Description
+>
+Overwrite
+Sends stdout to a file, deleting existing content.
+>>
+Append
+Sends stdout to a file, adding to the end.
+2>
+Error Redirect
+Sends only stderr to a file.
+<
+Input Redirect
+Feeds the contents of a file into a program’s stdin.
+;
+Semicolon
+Separates commands, running them one after another.
+
+
+
+5. The Pipe (|)
+The pipe is the ultimate realization of the UNIX philosophy.
+
+Function: It links the stdout of the first program directly to the stdin of the second program.
+Example: cat file.txt | grep "search_term"
+Grep usually takes a filename, but without one, it becomes an interactive filter for whatever data is piped into it.
+
+
+6. Interactive Programs & Signals
+Some programs (like man or base64) are interactive. They "block" the shell, meaning your keystrokes go directly to the program rather than the command line.
+
+man: Opens a dedicated interface for documentation.
+Ctrl-D: A crucial signal. It tells an interactive program that the input has ended (End of File/EOF), allowing the program to finish execution and return you to the shell.
+
+
+💡 Summary Memory Aid
+Arguments change what the program processes; Flags change how it processes it.
+> is a megaphone to a new file; >> is a megaphone to the end of an old file.
+The Pipe (|) is the "glue" that connects small tools into a powerful machine.
+Ctrl-D is how you say "I'm done talking" to an interactive program.
+
+Chapter 3: CLI Advanced
+1. Package Management (apt)
+On Debian-based systems, apt is the primary tool for managing software.
+
+apt update: Refreshes the local list of available packages (does not actually upgrade software).
+apt install [pkg]: Downloads and installs a package.
+apt remove [pkg]: Uninstalls a package.
+apt list --installed: Shows all packages currently present on the system.
+
+
+2. Processes and Signals
+A Process is a single instance of a running program.
+
+ps -ef: Displays running processes.
+-e: Everything (all processes).
+-f: Full format (extra details).
+$$: A shell variable that represents the Process ID (PID) of your current shell.
+kill: Sends a "Signal" to a process to change its state.
+Critical Signals:
+SIGTERM (15): The default signal. It asks a program to stop politely. Programs (like bash) can choose to ignore this.
+SIGKILL (9): The "Nuclear Option." It is handled by the Kernel, not the program. The process is terminated immediately and cannot be ignored.
+
+
+3. Job Control
+A Job is a process started by the shell that hasn't detached from the terminal.
+
+Action
+Signal/Command
+Effect
+Interrupt
+Ctrl-C (SIGINT)
+Requests the job to stop immediately (can be ignored).
+Suspend
+Ctrl-Z (SIGSTP)
+Pauses the job and puts it in the background.
+List Jobs
+jobs
+Shows all current background/suspended jobs.
+Foreground
+fg %1
+Brings job #1 back to the front (active).
+Background
+bg %1
+Tells suspended job #1 to run in the background.
+Start in BG
+&
+Adding & to the end of a command starts it in the background immediately.
+
+
+Warning: Running a job in the background without redirecting its output will result in text being "streamed" over your terminal, making it messy.
+
+
+4. Exit Codes & Logical Operators
+Every command returns an Exit Code (or Exit Status) when it finishes.
+
+0: Success ("OK").
+1 or 2: Error (varying severity).
+$?: A special variable that holds the exit code of the last command executed.
+Conditional Execution:
+&& (AND): Run the second command only if the first succeeded (Exit 0).
+Example: mkdir test && cd test
+|| (OR): Run the second command only if the first failed (Exit NOT 0).
+Example: cd folder || echo "Folder does not exist"
+
+
+5. System Monitoring
+Tools to check your hardware resources:
+
+free: Shows system-wide RAM usage.
+top: Provides a real-time, interactive view of CPU and RAM usage.
+du [file/dir]: (Disk Usage) Shows how much space a specific file or directory occupies.
+
+
+💡 Summary Memory Aid
+update finds the menu; install buys the food.
+SIGTERM is a request; SIGKILL is an order.
+$$ is "me" (the current shell).
+0 is the only "Happy" exit code in Linux; everything else is an error.
+&& is "Then"; || is "Else".
+Chapter 4: Users
+Chapter 4: Users, Groups, and Permissions
+1. The Multi-User System
+Linux is designed to be shared by multiple people. The Kernel is responsible for maintaining separation between them.
+
+Isolation: Users have private files and personal preferences.
+Protection: Users cannot access each other's files or signal (kill) each other’s processes.
+Authentication: Access is controlled via passwords and identity checks.
+User Management Commands
+useradd -m -s [shell] [user]: Creates a new user.
+-m: Creates a home directory.
+-s: Sets the default shell (e.g., /bin/bash).
+id: Displays the UID (User ID) and GID (Group ID) for a user.
+passwd: An interactive program to set or change a user's password.
+su [user]: "Switch User"—allows you to log in as another user.
+
+
+2. Root and Privileged Access
+Root is the administrative superuser.
+
+UID 0: The root user always has the ID of 0.
+Absolute Power: Standard permissions do not apply to root; it can access or change anything.
+sudo (SuperUser DO)
+sudo allows a permitted user to execute a command as root.
+
+How it works: It checks the /etc/sudoers file to see if the user is authorized.
+sudo bash: Opens a new shell session with root privileges.
+sudo su root: Logs into the root account without needing the root password (if the user has sudo rights).
+
+
+3. Groups and Collaboration
+Groups allow you to assign permissions to multiple people at once.
+
+Primary Group: Every user has exactly one. Files created by the user are owned by this group.
+Secondary Groups: A user can belong to many. This is how "privileged" access is often granted (e.g., being in the sudo group).
+groupadd / groupdel: Used to create or delete groups (requires sudo).
+
+
+4. Identity Files
+Linux uses simple text files to act as user databases:
+
+/etc/passwd: Defines users. Contains: Username, UID, Primary GID, Home Path, and Shell Path. (This is why ls can show names instead of just numbers).
+/etc/group: Defines groups. Contains: Group name, GID, and the list of member users.
+
+
+5. File Permissions (rwx)
+Permissions are divided into three categories: Owner, Group, and Others.
+The Math of Permissions (Octal)
+Permissions use a binary-based numbering system. This allows any combination of permissions to add up to a unique number:
+
+Read (r) = 4 (Binary 100)
+Write (w) = 2 (Binary 010)
+Execute (x) = 1 (Binary 001)
+
+Examples:
+
+7 (4+2+1) = Full access (rwx)
+5 (4+1) = Read and Execute (r-x)
+640 = Owner can rw-, Group can r--, Others have ---.
+Changing Ownership & Permissions
+chmod: Changes permissions. Only the owner or root can use this.
+chown: Changes the owner or group. Only root can change who owns a file.
+
+
+6. Directory Permissions
+Permissions behave differently for directories than for regular files:
+
+Permission
+For Files
+For Directories
+Read (r)
+View content.
+List files inside the directory.
+Write (w)
+Modify content.
+Create, Delete, or Rename files inside.
+Execute (x)
+Run as a program.
+Enter the directory (CD) and access files.
+
+
+Note: Write (w) on a directory is useless without Execute (x), because you can't modify what you can't enter.
+
+
+💡 Summary Memory Aid
+Root (UID 0) is the "God Mode" of the system.
+/etc/passwd is the "Who's Who" list.
+4-2-1: Read, Write, Run.
+chmod is for what you can do; chown is for who you are.
+For directories: x is the key to the door; r is the ability to see what's in the room.
+
+Chapter 5: Files
+1. Executables and Sensitive Files
+ELF (Executable and Linkable Format): The standard binary format for Linux executable files. Unlike text scripts, these are compiled into machine code.
+/etc/shadow: A highly protected file that stores encrypted user passwords.
+
+
+2. Task Scheduling with Cron
+Cron is a background service that executes tasks at specific times based on text files called "crontabs."
+The 5-Field Syntax
+A cron task is defined by five time fields followed by the command: Minute  Hour  Day  Month  Weekday  command
+
+Field
+Range
+Example
+Minute
+0–59
+*/5 (Every 5 mins)
+Hour
+0–23
+5 (At 5 AM)
+Day
+1–31
+1 (1st of the month)
+Month
+1–12
+12 (December)
+Weekday
+0–6
+0 (Sunday)
+
+
+* (Asterisk): Matches "any" or "every."
+/N: Matches "every N" (e.g., */10 in the minute field means every 10 minutes).
+
+
+3. Services and systemd
+A Service (or Daemon) is a program designed to run continuously in the background (e.g., rsyslogd for logging or cron for scheduling).
+
+systemd: The "Initer." It is the first process started by the kernel (PID 1). It is responsible for starting and managing all other services.
+.service files: Located in /etc/systemd/system/, these files tell systemd how and when to run a specific program.
+systemctl: The primary utility used to start, stop, restart, or check the status of services.
+
+
+4. Archiving and Compression with tar
+Archiving bundles multiple files into one; compression shrinks that bundle.
+The tar Command Flags
+Operations:
+-c: Create a new archive.
+-x: Extract an archive.
+-t: Test/List contents without extracting.
+Modifiers:
+-f: Specify the Filename (Must be the last flag in a sequence).
+-v: Verbose (list files as they are processed).
+-p: Preserve permissions/ownership (vital for backups).
+-C: Change directory (extract to a specific path).
+Compression Types:
+-z: gzip (Fast, standard).
+-j: bzip2 (Smaller size, slower).
+-J: xz (Smallest size, slowest).
+
+Example: tar -cvzf backup.tar.gz /home/user (Create a Verbose Gzip File).
+
+
+5. The "Everything is a File" Philosophy
+Linux exposes hardware and system information through the filesystem, allowing you to use standard tools (like cat or echo) to interact with the kernel.
+Special Directories
+/proc: A virtual filesystem providing Process and hardware info. Each numbered folder corresponds to a PID.
+/dev: Contains Device files representing hardware.
+Block Devices (b): Handle data in blocks (e.g., Hard Drives, SSDs).
+Character Devices (c): Handle data as a stream of characters (e.g., Keyboards, Teletypes).
+Virtual Devices (Pseudo-devices)
+/dev/null: The "Black Hole." Any data sent here disappears.
+/dev/random & /dev/urandom: Sources for generating random data.
+Symbolic Links (Symlinks)
+Represented by file type l.
+A "shortcut" that points to another file path.
+Created using the ln -s command.
+
+
+💡 Summary Memory Aid
+Cron fields: "Big Timers" (Min, Hour, Day, Month, Week).
+systemd is the "Parent of all Processes" (PID 1).
+tar -f: Always put the "f" next to the filename.
+/proc is for Processes; /dev is for Devices.
+Block (b) is for storage; Character (c) is for streams.
+
