@@ -5,6 +5,7 @@ import { Scissors, Merge, CircleDot } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import { generateId, countWords, getSizeIndicator } from '@/lib/utils';
+import { getStoredApiKey, getStoredModel } from './ApiKeySettings';
 import type { Chunk } from '@/lib/schemas/task';
 
 interface Step3Props {
@@ -47,41 +48,32 @@ export default function Step3Chunking({
     setIsChunking(true);
     showToast('Analyzing text and creating chunks...');
 
-    // Simulate API delay (in real app, this would call /api/chunk)
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    const apiKey = getStoredApiKey();
+    const model = getStoredModel();
 
-    const paragraphs = rawText.split('\n\n').filter((p) => p.trim());
-    const newChunks: Chunk[] = [];
-    let currentLine = 0;
+    try {
+      const res = await fetch('/api/chunk', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(apiKey ? { 'x-api-key': apiKey, 'x-model': model } : {}),
+        },
+        body: JSON.stringify({ text: rawText, taskPrompt }),
+      });
 
-    for (let i = 0; i < paragraphs.length; i++) {
-      const para = paragraphs[i];
-      const paraLines = para.split('\n').length;
-      const words = countWords(para);
+      const data = await res.json();
 
-      if (words > 50) {
-        const paraWords = para.trim().split(/\s+/);
-        const start = paraWords.slice(0, Math.min(7, paraWords.length)).join(' ');
-        const end = paraWords.slice(-Math.min(7, paraWords.length)).join(' ');
-
-        newChunks.push({
-          id: generateId(),
-          title: `Section ${newChunks.length + 1}`,
-          start,
-          end,
-          lines: [currentLine + 1, currentLine + paraLines],
-          ctx: i > 0 ? 'Continuation of previous discussion' : null,
-          text: para,
-          wordCount: words,
-        });
+      if (!res.ok) {
+        throw new Error(data.error || 'Chunking failed');
       }
 
-      currentLine += paraLines + 1;
+      setChunks(data.chunks);
+      showToast(`Created ${data.chunks.length} chunks`);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Chunking failed');
+    } finally {
+      setIsChunking(false);
     }
-
-    setChunks(newChunks);
-    setIsChunking(false);
-    showToast(`Created ${newChunks.length} chunks`);
   };
 
   useEffect(() => {

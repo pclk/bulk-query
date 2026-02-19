@@ -1,12 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { Settings } from 'lucide-react';
 import StepIndicator from './StepIndicator';
 import ToastContainer from './ToastContainer';
+import ApiKeySettings, { getStoredApiKey } from './ApiKeySettings';
 import Step1TaskDefinition from './Step1TaskDefinition';
 import Step2TextInput from './Step2TextInput';
 import Step3Chunking from './Step3Chunking';
 import Step4Processing from './Step4Processing';
+import Button from '@/components/ui/Button';
 import { generateId } from '@/lib/utils';
 import type { Template, Chunk, ProcessingResult } from '@/lib/schemas/task';
 
@@ -19,6 +22,8 @@ export default function BulkQueryApp() {
   const [currentStep, setCurrentStep] = useState(1);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [showSettings, setShowSettings] = useState(false);
+  const [hasApiKey, setHasApiKey] = useState(false);
 
   // Step 1: Task Definition
   const [taskPrompt, setTaskPrompt] = useState('');
@@ -41,6 +46,10 @@ export default function BulkQueryApp() {
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 3000);
+  };
+
+  const refreshApiKeyStatus = () => {
+    setHasApiKey(!!getStoredApiKey());
   };
 
   const goToStep = (step: number) => {
@@ -86,7 +95,7 @@ export default function BulkQueryApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStep]);
 
-  // Load saved templates from localStorage
+  // Load saved templates from localStorage + check API key
   useEffect(() => {
     const saved = localStorage.getItem('bulk-query-templates');
     if (saved) {
@@ -96,6 +105,7 @@ export default function BulkQueryApp() {
         console.error('Failed to load templates:', e);
       }
     }
+    refreshApiKeyStatus();
   }, []);
 
   // Save templates to localStorage
@@ -111,11 +121,37 @@ export default function BulkQueryApp() {
         <h1 className="text-3xl font-bold bg-gradient-to-br from-accent to-accent-purple bg-clip-text text-transparent">
           bulk-query
         </h1>
-        <div className="text-xs text-gray-500 text-right">
-          <div>Cmd/Ctrl + Enter: Next Step</div>
-          <div>Cmd/Ctrl + Backspace: Previous Step</div>
+        <div className="flex items-center gap-4">
+          <Button
+            variant="secondary"
+            size="small"
+            onClick={() => setShowSettings(true)}
+            className={!hasApiKey ? 'border border-amber-500/50' : ''}
+          >
+            <span className="flex items-center gap-2">
+              <Settings size={16} />
+              {hasApiKey ? 'API Settings' : 'Set API Key'}
+            </span>
+          </Button>
+          <div className="text-xs text-gray-500 text-right">
+            <div>Cmd/Ctrl + Enter: Next Step</div>
+            <div>Cmd/Ctrl + Backspace: Previous Step</div>
+          </div>
         </div>
       </div>
+
+      {/* API key warning banner */}
+      {!hasApiKey && (
+        <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-center justify-between">
+          <div className="text-sm text-amber-200">
+            <strong>No API key configured.</strong>{' '}
+            Add your Anthropic API key to enable AI-powered chunking and processing.
+          </div>
+          <Button size="small" onClick={() => setShowSettings(true)}>
+            Configure
+          </Button>
+        </div>
+      )}
 
       <StepIndicator
         currentStep={currentStep}
@@ -167,6 +203,16 @@ export default function BulkQueryApp() {
           results={results}
           setResults={setResults}
           onBack={prevStep}
+          showToast={showToast}
+        />
+      )}
+
+      {showSettings && (
+        <ApiKeySettings
+          onClose={() => {
+            setShowSettings(false);
+            refreshApiKeyStatus();
+          }}
           showToast={showToast}
         />
       )}

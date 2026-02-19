@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Copy, RefreshCw, Loader2, CheckCircle, XCircle, Clock } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
+import { getStoredApiKey, getStoredModel } from './ApiKeySettings';
 import type { Chunk, ProcessingResult } from '@/lib/schemas/task';
 
 interface Step4Props {
@@ -31,32 +32,25 @@ export default function Step4Processing({
   const [currentProcessing, setCurrentProcessing] = useState(0);
 
   const processChunk = async (chunk: Chunk): Promise<string> => {
-    // Simulate API delay (in real app, this would call /api/process)
-    await new Promise((resolve) => setTimeout(resolve, 1500 + Math.random() * 1000));
+    const apiKey = getStoredApiKey();
+    const model = getStoredModel();
 
-    let output = chunk.text;
+    const res = await fetch('/api/process', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(apiKey ? { 'x-api-key': apiKey, 'x-model': model } : {}),
+      },
+      body: JSON.stringify({ chunk, taskPrompt }),
+    });
 
-    if (taskPrompt.toLowerCase().includes('flashcard')) {
-      const sentences = chunk.text.split(/[.!?]+/).filter((s) => s.trim());
-      output = sentences
-        .slice(0, 3)
-        .map((s, i) => {
-          const q = `What is discussed in sentence ${i + 1}?`;
-          const a = s.trim();
-          return `${q};${a}`;
-        })
-        .join('\n');
-    } else if (taskPrompt.toLowerCase().includes('summarize')) {
-      const words = chunk.text.split(/\s+/);
-      output = `Summary: ${words.slice(0, Math.min(50, words.length)).join(' ')}...`;
-    } else if (taskPrompt.toLowerCase().includes('bullet')) {
-      const sentences = chunk.text.split(/[.!?]+/).filter((s) => s.trim());
-      output = sentences.map((s) => `- ${s.trim()}`).join('\n');
-    } else {
-      output = `[Processed with: ${taskPrompt}]\n\n${chunk.text}`;
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || 'Processing failed');
     }
 
-    return output;
+    return data.output;
   };
 
   const startProcessing = async () => {
