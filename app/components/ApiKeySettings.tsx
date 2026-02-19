@@ -8,8 +8,9 @@ const STORAGE_KEY = 'bulk-query-api-key';
 const MODEL_STORAGE_KEY = 'bulk-query-model';
 
 const MODELS: { id: string; label: string }[] = [
-  { id: 'claude-sonnet-4-5-20250929', label: 'Claude Sonnet 4.5 (Recommended)' },
-  { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5 (Faster, cheaper)' },
+  { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 (Recommended)' },
+  { id: 'claude-opus-4-6', label: 'Claude Opus 4.6 (Most intelligent)' },
+  { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5 (Fastest, cheapest)' },
 ];
 
 export const DEFAULT_MODEL = MODELS[0].id;

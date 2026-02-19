@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Scissors, Merge, CircleDot } from 'lucide-react';
+import { Scissors, Merge, CircleDot, BarChart3 } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
-import { generateId, countWords, getSizeIndicator } from '@/lib/utils';
+import { generateId, countWords, getSizeIndicator, computeChunkStats } from '@/lib/utils';
 import { getStoredApiKey, getStoredModel } from './ApiKeySettings';
 import type { Chunk } from '@/lib/schemas/task';
 
@@ -199,8 +199,46 @@ export default function Step3Chunking({
     );
   }
 
+  const stats = computeChunkStats(chunks);
+
   return (
     <div>
+      {/* Summary Statistics */}
+      {chunks.length > 0 && (
+        <Card className="mb-6">
+          <div className="flex items-center gap-2 mb-4">
+            <BarChart3 size={18} className="text-accent" />
+            <h3 className="text-base font-semibold">Chunk Statistics</h3>
+          </div>
+          <div className="grid grid-cols-3 gap-4 sm:grid-cols-6">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-gray-100">{stats.count}</div>
+              <div className="text-xs text-gray-400">Chunks</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-gray-100">{stats.totalWords.toLocaleString()}</div>
+              <div className="text-xs text-gray-400">Total Words</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-gray-100">{stats.avgWords.toLocaleString()}</div>
+              <div className="text-xs text-gray-400">Avg Words</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-gray-100">{stats.minWords.toLocaleString()}</div>
+              <div className="text-xs text-gray-400">Min Words</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-gray-100">{stats.maxWords.toLocaleString()}</div>
+              <div className="text-xs text-gray-400">Max Words</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-gray-100">~{(stats.estimatedInputTokens + stats.estimatedOutputTokens).toLocaleString()}</div>
+              <div className="text-xs text-gray-400">Est. Tokens (I/O)</div>
+            </div>
+          </div>
+        </Card>
+      )}
+
       <div className="grid grid-cols-[300px_1fr] gap-6">
         {/* Chunk Sidebar */}
         <div>

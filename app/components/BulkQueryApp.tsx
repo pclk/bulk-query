@@ -1,10 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Settings } from 'lucide-react';
+import { useSession, signOut } from 'next-auth/react';
+import { Settings, LogOut, User } from 'lucide-react';
 import StepIndicator from './StepIndicator';
 import ToastContainer from './ToastContainer';
 import ApiKeySettings, { getStoredApiKey } from './ApiKeySettings';
+import LoginForm from './LoginForm';
+import ProjectHistory from './ProjectHistory';
 import Step1TaskDefinition from './Step1TaskDefinition';
 import Step2TextInput from './Step2TextInput';
 import Step3Chunking from './Step3Chunking';
@@ -19,6 +22,7 @@ interface Toast {
 }
 
 export default function BulkQueryApp() {
+  const { data: session, status } = useSession();
   const [currentStep, setCurrentStep] = useState(1);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -115,6 +119,86 @@ export default function BulkQueryApp() {
     }
   }, [savedTemplates]);
 
+  const saveProject = async (name: string) => {
+    try {
+      const res = await fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          taskPrompt,
+          rawText,
+          chunks,
+          results: results.length > 0 ? results : null,
+          processingMode,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Save failed');
+      }
+
+      showToast(`Project "${name}" saved!`);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Save failed');
+    }
+  };
+
+  const loadProject = (project: {
+    rawText: string;
+    taskPrompt: string;
+    chunks: Chunk[];
+    results: ProcessingResult[] | null;
+    processingMode: string;
+  }) => {
+    setTaskPrompt(project.taskPrompt);
+    setRawText(project.rawText);
+    setChunks(project.chunks);
+    setResults(project.results || []);
+    setProcessingMode(project.processingMode);
+
+    // Auto-navigate to the most relevant step
+    if (project.results && project.results.length > 0) {
+      setCompletedSteps([1, 2, 3]);
+      setCurrentStep(4);
+    } else if (project.chunks.length > 0) {
+      setCompletedSteps([1, 2]);
+      setCurrentStep(3);
+    } else if (project.rawText) {
+      setCompletedSteps([1]);
+      setCurrentStep(2);
+    } else {
+      setCurrentStep(1);
+    }
+  };
+
+  if (status === 'loading') {
+    return (
+      <div className="max-w-app mx-auto p-8 min-h-screen flex items-center justify-center">
+        <div className="text-gray-400">Loading...</div>
+      </div>
+    );
+  }
+
+  // Show login form when not authenticated
+  if (!session) {
+    return (
+      <div className="max-w-app mx-auto p-8 min-h-screen">
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold bg-gradient-to-br from-accent to-accent-purple bg-clip-text text-transparent">
+            bulk-query
+          </h1>
+          <p className="text-gray-400 mt-2">Process large text inputs through AI operations</p>
+        </div>
+        <LoginForm showToast={showToast} />
+        <ToastContainer toasts={toasts} />
+      </div>
+    );
+  }
+
+  const canSaveProject = taskPrompt.trim().length > 0 && rawText.trim().length > 0;
+
   return (
     <div className="max-w-app mx-auto p-8 min-h-screen">
       <div className="flex justify-between items-center mb-4">
@@ -122,6 +206,20 @@ export default function BulkQueryApp() {
           bulk-query
         </h1>
         <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 text-sm text-gray-400">
+            <User size={14} />
+            {session.user?.email}
+          </div>
+          <Button
+            variant="secondary"
+            size="small"
+            onClick={() => signOut()}
+          >
+            <span className="flex items-center gap-1">
+              <LogOut size={14} />
+              Sign Out
+            </span>
+          </Button>
           <Button
             variant="secondary"
             size="small"
@@ -133,10 +231,6 @@ export default function BulkQueryApp() {
               {hasApiKey ? 'API Settings' : 'Set API Key'}
             </span>
           </Button>
-          <div className="text-xs text-gray-500 text-right">
-            <div>Cmd/Ctrl + Enter: Next Step</div>
-            <div>Cmd/Ctrl + Backspace: Previous Step</div>
-          </div>
         </div>
       </div>
 
@@ -152,6 +246,16 @@ export default function BulkQueryApp() {
           </Button>
         </div>
       )}
+
+      {/* Project History */}
+      <div className="mb-6">
+        <ProjectHistory
+          onLoad={loadProject}
+          onSave={saveProject}
+          showToast={showToast}
+          canSave={canSaveProject}
+        />
+      </div>
 
       <StepIndicator
         currentStep={currentStep}
