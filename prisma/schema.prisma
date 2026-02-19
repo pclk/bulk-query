@@ -9,10 +9,26 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-model Template {
-  id        String   @id @default(cuid())
-  name      String
-  prompt    String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+model User {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  password  String
+  createdAt DateTime  @default(now())
+  projects  Project[]
+}
+
+model Project {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name           String
+  taskPrompt     String
+  rawText        String
+  chunks         Json
+  results        Json?
+  processingMode String   @default("sequential")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([userId])
 }

@@ -35,9 +35,12 @@ Respond ONLY with valid JSON in this exact structure:
 ### Semantic Coherence
 Each chunk should answer: "What ONE topic or concept does this section cover?"
 
-### Size Guidelines
-Target: 200-1000 tokens per chunk (roughly 150-750 words)
-Minimum: ~200 tokens. Maximum: ~1500 tokens.
+### Size Guidelines — CRITICAL
+Target: **750-1500 words per chunk** (roughly 1000-2000 tokens).
+Aim for approximately **1000 words** per chunk as the sweet spot.
+Minimum: 500 words — never create tiny fragments under 500 words; merge them with adjacent content.
+Maximum: 2000 words — only split if a section clearly covers two distinct sub-topics.
+**Prefer fewer, larger chunks** over many small fragments. Err on the side of keeping related content together.
 
 ### Context Preambles
 Write preambles that define key terms used but not introduced in this chunk, situate the chunk in the broader narrative, and are under 40 words. Use null if self-contained.
@@ -95,7 +98,7 @@ export async function POST(request: Request) {
 
     const { text } = parsed.data;
     const apiKey = request.headers.get('x-api-key');
-    const model = request.headers.get('x-model') || 'claude-sonnet-4-5-20250929';
+    const model = request.headers.get('x-model') || 'claude-sonnet-4-6';
 
     // Fallback to local chunking if no API key
     if (!apiKey) {

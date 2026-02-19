@@ -35,7 +35,7 @@ export async function POST(request: Request) {
 
     const { chunk, taskPrompt } = parsed.data;
     const apiKey = request.headers.get('x-api-key');
-    const model = request.headers.get('x-model') || 'claude-sonnet-4-5-20250929';
+    const model = request.headers.get('x-model') || 'claude-sonnet-4-6';
 
     // Fallback to local processing if no API key
     if (!apiKey) {
