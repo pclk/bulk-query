@@ -1,9 +1,12 @@
 import { Pool, neonConfig } from '@neondatabase/serverless';
 import { PrismaNeon } from '@prisma/adapter-neon';
 import { PrismaClient } from '@prisma/client';
-import ws from 'ws';
 
-neonConfig.webSocketConstructor = ws;
+// Only use the `ws` package when native WebSocket is not available
+// (Vercel's Node 18+ runtime has native WebSocket; `ws` breaks when bundled by webpack)
+if (typeof WebSocket === 'undefined') {
+  neonConfig.webSocketConstructor = require('ws'); // eslint-disable-line
+}
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;

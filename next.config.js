@@ -1,5 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  experimental: {
+    // Prevent webpack from bundling these — they must run as native Node modules
+    serverComponentsExternalPackages: ['ws', 'bcryptjs'],
+  },
   async headers() {
     return [
       {
