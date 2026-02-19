@@ -27,7 +27,8 @@ export async function GET() {
     });
 
     return NextResponse.json({ projects });
-  } catch {
+  } catch (error) {
+    console.error('[projects] Error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -69,7 +70,8 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json({ project }, { status: 201 });
-  } catch {
+  } catch (error) {
+    console.error('[projects] Error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
