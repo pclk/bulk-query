@@ -364,7 +364,7 @@ export default function Step3Chunking({
             <Button variant="secondary" onClick={onBack}>
               &larr; Back
             </Button>
-            <Button onClick={handleNext}>Process Chunks &rarr;</Button>
+            <Button onClick={handleNext}>Next &rarr;</Button>
           </div>
         </Card>
       </div>

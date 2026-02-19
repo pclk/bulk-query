@@ -31,6 +31,8 @@ export default function Step4Processing({
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentProcessing, setCurrentProcessing] = useState(0);
 
+  const missingTask = !taskPrompt.trim();
+
   const processChunk = async (chunk: Chunk): Promise<string> => {
     const apiKey = getStoredApiKey();
     const model = getStoredModel();
@@ -109,7 +111,7 @@ export default function Step4Processing({
   };
 
   useEffect(() => {
-    if (results.length === 0) {
+    if (results.length === 0 && !missingTask) {
       startProcessing();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -132,6 +134,22 @@ export default function Step4Processing({
 
   const completedCount = results.filter((r) => r.status === 'complete').length;
   const errorCount = results.filter((r) => r.status === 'error').length;
+
+  if (missingTask) {
+    return (
+      <div>
+        <Card className="text-center py-12">
+          <h2 className="text-xl font-semibold text-gray-100 mb-4">No Task Defined</h2>
+          <p className="text-gray-400 mb-6">
+            You need to define a task prompt in step 3a before processing chunks with the API.
+          </p>
+          <Button variant="secondary" onClick={onBack}>
+            &larr; Back to Define Task
+          </Button>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div>
