@@ -15,6 +15,7 @@ const MODELS: { id: string; label: string }[] = [
 
 export const DEFAULT_MODEL = MODELS[0].id;
 
+// These read from localStorage (which acts as a fast cache of server state)
 export function getStoredApiKey(): string {
   if (typeof window === 'undefined') return '';
   return localStorage.getItem(STORAGE_KEY) || '';
@@ -23,6 +24,49 @@ export function getStoredApiKey(): string {
 export function getStoredModel(): string {
   if (typeof window === 'undefined') return DEFAULT_MODEL;
   return localStorage.getItem(MODEL_STORAGE_KEY) || DEFAULT_MODEL;
+}
+
+// Sync server settings into localStorage cache. Called once on login.
+export async function loadSettingsFromServer(): Promise<{
+  apiKey: string;
+  model: string;
+  templates: { id: string; name: string; prompt: string }[];
+  draftText: string;
+} | null> {
+  try {
+    const res = await fetch('/api/settings');
+    if (!res.ok) return null;
+    const data = await res.json();
+
+    // Cache in localStorage for fast synchronous access
+    if (data.apiKey) {
+      localStorage.setItem(STORAGE_KEY, data.apiKey);
+    } else {
+      localStorage.removeItem(STORAGE_KEY);
+    }
+    localStorage.setItem(MODEL_STORAGE_KEY, data.model || DEFAULT_MODEL);
+
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+// Save a settings field to the server
+export async function saveSettingToServer(
+  field: string,
+  value: unknown
+): Promise<boolean> {
+  try {
+    const res = await fetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [field]: value }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
 }
 
 interface ApiKeySettingsProps {
@@ -36,21 +80,35 @@ export default function ApiKeySettings({ onClose, showToast }: ApiKeySettingsPro
   const [showKey, setShowKey] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [verified, setVerified] = useState<boolean | null>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setApiKey(getStoredApiKey());
     setModel(getStoredModel());
   }, []);
 
-  const save = () => {
+  const save = async () => {
+    setSaving(true);
     const trimmed = apiKey.trim();
+
+    // Update localStorage cache immediately
     if (trimmed) {
       localStorage.setItem(STORAGE_KEY, trimmed);
     } else {
       localStorage.removeItem(STORAGE_KEY);
     }
     localStorage.setItem(MODEL_STORAGE_KEY, model);
-    showToast(trimmed ? 'API key saved' : 'API key cleared');
+
+    // Persist to server
+    const ok = await saveSettingToServer('apiKey', trimmed);
+    await saveSettingToServer('model', model);
+
+    setSaving(false);
+    if (ok) {
+      showToast(trimmed ? 'API key saved to your account' : 'API key cleared');
+    } else {
+      showToast(trimmed ? 'API key saved locally (server sync failed)' : 'API key cleared');
+    }
     setVerified(null);
   };
 
@@ -89,9 +147,10 @@ export default function ApiKeySettings({ onClose, showToast }: ApiKeySettingsPro
     }
   };
 
-  const clear = () => {
+  const clear = async () => {
     setApiKey('');
     localStorage.removeItem(STORAGE_KEY);
+    await saveSettingToServer('apiKey', '');
     setVerified(null);
     showToast('API key removed');
   };
@@ -186,8 +245,8 @@ export default function ApiKeySettings({ onClose, showToast }: ApiKeySettingsPro
 
         {/* Actions */}
         <div className="flex gap-3">
-          <Button onClick={() => { save(); onClose(); }}>
-            Save &amp; Close
+          <Button onClick={async () => { await save(); onClose(); }} disabled={saving}>
+            {saving ? 'Saving...' : 'Save & Close'}
           </Button>
           <Button variant="secondary" onClick={verify} disabled={verifying || !apiKey.trim()}>
             {verifying ? 'Verifying...' : 'Verify Key'}
@@ -200,7 +259,8 @@ export default function ApiKeySettings({ onClose, showToast }: ApiKeySettingsPro
         </div>
 
         <p className="mt-4 text-xs text-gray-600">
-          Your key is stored in this browser only (localStorage) and sent to your own server&apos;s API routes. It is never logged or stored server-side.
+          Your API key is saved to your account and synced across devices.
+          It is sent only to your own server&apos;s API routes for processing.
         </p>
       </div>
     </div>

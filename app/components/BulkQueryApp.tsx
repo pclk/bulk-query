@@ -1,11 +1,15 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { Settings, LogOut, User } from 'lucide-react';
 import StepIndicator from './StepIndicator';
 import ToastContainer from './ToastContainer';
-import ApiKeySettings, { getStoredApiKey } from './ApiKeySettings';
+import ApiKeySettings, {
+  getStoredApiKey,
+  loadSettingsFromServer,
+  saveSettingToServer,
+} from './ApiKeySettings';
 import LoginForm from './LoginForm';
 import ProjectHistory from './ProjectHistory';
 import Step1TaskDefinition from './Step1TaskDefinition';
@@ -30,6 +34,7 @@ export default function BulkQueryApp() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [showSettings, setShowSettings] = useState(false);
   const [hasApiKey, setHasApiKey] = useState(false);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
 
   // Step 3a: Task Definition (optional)
   const [taskPrompt, setTaskPrompt] = useState('');
@@ -45,6 +50,10 @@ export default function BulkQueryApp() {
   // Step 4: Processing (optional)
   const [processingMode, setProcessingMode] = useState('sequential');
   const [results, setResults] = useState<ProcessingResult[]>([]);
+
+  // Track whether templates changed by the user (not initial load)
+  const templatesSaveRef = useRef(false);
+  const draftSaveRef = useRef<NodeJS.Timeout | null>(null);
 
   const showToast = (message: string) => {
     const id = generateId();
@@ -110,32 +119,46 @@ export default function BulkQueryApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStep, subStep]);
 
-  // Load saved templates from localStorage + check API key
+  // Load all settings from server on session start
   useEffect(() => {
-    const saved = localStorage.getItem('bulk-query-templates');
-    if (saved) {
-      try {
-        setSavedTemplates(JSON.parse(saved));
-      } catch (e) {
-        console.error('Failed to load templates:', e);
+    if (!session) return;
+
+    const loadSettings = async () => {
+      const settings = await loadSettingsFromServer();
+      if (settings) {
+        if (Array.isArray(settings.templates) && settings.templates.length > 0) {
+          setSavedTemplates(settings.templates as Template[]);
+        }
+        if (settings.draftText) {
+          setRawText(settings.draftText);
+        }
       }
-    }
-    refreshApiKeyStatus();
-  }, []);
+      refreshApiKeyStatus();
+      setSettingsLoaded(true);
+    };
 
-  // Save templates to localStorage
+    loadSettings();
+  }, [session]);
+
+  // Save templates to server when they change (skip initial load)
   useEffect(() => {
-    if (savedTemplates.length > 0) {
-      localStorage.setItem('bulk-query-templates', JSON.stringify(savedTemplates));
+    if (!settingsLoaded) return;
+    if (!templatesSaveRef.current) {
+      templatesSaveRef.current = true;
+      return;
     }
-  }, [savedTemplates]);
+    saveSettingToServer('templates', savedTemplates);
+  }, [savedTemplates, settingsLoaded]);
 
-  // Auto-save callback for Step 1 (text input)
+  // Debounced draft text save to server
   const handleAutoSave = useCallback(
     async (text: string) => {
       if (!session) return;
-      // Auto-save is handled via localStorage in the Step2TextInput component.
-      // Full project save is still explicit via ProjectHistory.
+
+      if (draftSaveRef.current) clearTimeout(draftSaveRef.current);
+      draftSaveRef.current = setTimeout(() => {
+        saveSettingToServer('draftText', text);
+      }, 3000);
     },
     [session]
   );

@@ -35,7 +35,7 @@ export async function GET() {
 
 const createProjectSchema = z.object({
   name: z.string().min(1, 'Project name is required'),
-  taskPrompt: z.string().min(1),
+  taskPrompt: z.string().default(''),
   rawText: z.string().min(1),
   chunks: z.array(z.unknown()),
   results: z.array(z.unknown()).nullable().optional(),

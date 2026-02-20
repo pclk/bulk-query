@@ -31,16 +31,12 @@ export default function Step2TextInput({
 
   const effectiveSaveStatus = saveStatus !== 'idle' ? saveStatus : localSaveStatus;
 
-  // Auto-save to localStorage on every change (immediate)
-  // Debounced auto-save to backend via onAutoSave callback
+  // Debounced auto-save to server via onAutoSave callback
   useEffect(() => {
     if (!rawText.trim()) return;
 
-    // Immediate localStorage persistence
-    localStorage.setItem('bulk-query-draft-text', rawText);
     setLocalSaveStatus('saving');
 
-    // Debounced backend save
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       if (onAutoSave) {
@@ -54,21 +50,12 @@ export default function Step2TextInput({
     };
   }, [rawText, onAutoSave]);
 
-  // Restore draft from localStorage on mount
-  useEffect(() => {
-    if (!rawText) {
-      const draft = localStorage.getItem('bulk-query-draft-text');
-      if (draft) {
-        setRawText(draft);
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const handleClear = () => {
     setRawText('');
-    localStorage.removeItem('bulk-query-draft-text');
     setLocalSaveStatus('idle');
+    if (onAutoSave) {
+      onAutoSave('');
+    }
     showToast('Text cleared');
   };
 
@@ -90,7 +77,7 @@ export default function Step2TextInput({
         <h2 className="text-xl font-semibold mb-4 text-gray-100">Input Your Text</h2>
         <p className="mb-6 text-gray-400">
           Paste the text you want to process (recommended: 1,000&ndash;6,000 words).
-          Your text is auto-saved as you type.
+          Your text is auto-saved to your account as you type.
         </p>
 
         <div className="mb-4 flex justify-between items-center">
