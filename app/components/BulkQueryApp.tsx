@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSession, signOut } from 'next-auth/react';
-import { Settings, LogOut, User } from 'lucide-react';
+import { Settings, LogOut, User, Plus } from 'lucide-react';
 import StepIndicator from './StepIndicator';
 import ToastContainer, { type Toast } from './ToastContainer';
 import ApiKeySettings, {
@@ -20,6 +20,13 @@ import Step4Processing from './Step4Processing';
 import Button from '@/components/ui/Button';
 import { generateId } from '@/lib/utils';
 import type { Template, Chunk, ProcessingResult } from '@/lib/schemas/task';
+
+/** Generate an auto-name from the first ~40 chars of text */
+function autoProjectName(text: string): string {
+  const trimmed = text.trim().replace(/\s+/g, ' ');
+  if (trimmed.length <= 40) return trimmed;
+  return trimmed.slice(0, 40).trimEnd() + '...';
+}
 
 export default function BulkQueryApp() {
   const { data: session, status } = useSession();
@@ -46,9 +53,15 @@ export default function BulkQueryApp() {
   const [processingMode, setProcessingMode] = useState('sequential');
   const [results, setResults] = useState<ProcessingResult[]>([]);
 
+  // Project auto-save state
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
+  const [projectName, setProjectName] = useState('');
+
   // Track whether templates changed by the user (not initial load)
   const templatesSaveRef = useRef(false);
   const draftSaveRef = useRef<NodeJS.Timeout | null>(null);
+  const projectSaveRef = useRef<NodeJS.Timeout | null>(null);
+  const projectRefreshRef = useRef<(() => void) | null>(null);
 
   const showToast = (message: string, error?: unknown) => {
     const id = generateId();
@@ -94,6 +107,89 @@ export default function BulkQueryApp() {
     setCurrentStep(4);
   };
 
+  // === Project auto-save ===
+
+  const createProject = useCallback(async (text: string): Promise<string | null> => {
+    try {
+      const name = autoProjectName(text);
+      const res = await fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          taskPrompt: '',
+          rawText: text,
+          chunks: [],
+          results: null,
+          processingMode: 'sequential',
+        }),
+      });
+
+      if (!res.ok) return null;
+      const data = await res.json();
+      setProjectName(name);
+      projectRefreshRef.current?.();
+      return data.project.id;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const updateProject = useCallback(async (projectId: string, fields: Record<string, unknown>) => {
+    try {
+      await fetch(`/api/projects/${projectId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(fields),
+      });
+      projectRefreshRef.current?.();
+    } catch {
+      // Silent fail for auto-save
+    }
+  }, []);
+
+  const debouncedProjectSave = useCallback((projectId: string, fields: Record<string, unknown>) => {
+    if (projectSaveRef.current) clearTimeout(projectSaveRef.current);
+    projectSaveRef.current = setTimeout(() => {
+      updateProject(projectId, fields);
+    }, 2000);
+  }, [updateProject]);
+
+  // Auto-create project when moving from step 1 to step 2
+  const handleNextFromStep1 = useCallback(async () => {
+    completeStep(1);
+    setCurrentStep(2);
+
+    if (!currentProjectId && rawText.trim()) {
+      const id = await createProject(rawText);
+      if (id) setCurrentProjectId(id);
+    } else if (currentProjectId) {
+      updateProject(currentProjectId, { rawText });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentProjectId, rawText, createProject, updateProject]);
+
+  // Auto-save chunks when they change (after chunking step)
+  useEffect(() => {
+    if (currentProjectId && chunks.length > 0) {
+      debouncedProjectSave(currentProjectId, { chunks });
+    }
+  }, [chunks, currentProjectId, debouncedProjectSave]);
+
+  // Auto-save task prompt when it changes
+  useEffect(() => {
+    if (currentProjectId && taskPrompt) {
+      debouncedProjectSave(currentProjectId, { taskPrompt });
+    }
+  }, [taskPrompt, currentProjectId, debouncedProjectSave]);
+
+  // Auto-save results when they change
+  useEffect(() => {
+    if (currentProjectId && results.length > 0) {
+      debouncedProjectSave(currentProjectId, { results });
+    }
+  }, [results, currentProjectId, debouncedProjectSave]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
@@ -103,7 +199,11 @@ export default function BulkQueryApp() {
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
         e.preventDefault();
         if (currentStep < 4) {
-          nextStep();
+          if (currentStep === 1) {
+            handleNextFromStep1();
+          } else {
+            nextStep();
+          }
         }
       }
       if ((e.metaKey || e.ctrlKey) && e.key === 'Backspace') {
@@ -117,7 +217,7 @@ export default function BulkQueryApp() {
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentStep, subStep]);
+  }, [currentStep, subStep, handleNextFromStep1]);
 
   // Load all settings from server on session start
   useEffect(() => {
@@ -163,39 +263,17 @@ export default function BulkQueryApp() {
     [session]
   );
 
-  const saveProject = async (name: string) => {
-    try {
-      const res = await fetch('/api/projects', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name,
-          taskPrompt,
-          rawText,
-          chunks,
-          results: results.length > 0 ? results : null,
-          processingMode,
-        }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Save failed');
-      }
-
-      showToast(`Project "${name}" saved!`);
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Save failed', err);
-    }
-  };
-
   const loadProject = (project: {
+    id: string;
+    name: string;
     rawText: string;
     taskPrompt: string;
     chunks: Chunk[];
     results: ProcessingResult[] | null;
     processingMode: string;
   }) => {
+    setCurrentProjectId(project.id);
+    setProjectName(project.name);
     setTaskPrompt(project.taskPrompt);
     setRawText(project.rawText);
     setChunks(project.chunks);
@@ -216,6 +294,19 @@ export default function BulkQueryApp() {
     } else {
       setCurrentStep(1);
     }
+  };
+
+  const startNewProject = () => {
+    setCurrentProjectId(null);
+    setProjectName('');
+    setTaskPrompt('');
+    setRawText('');
+    setChunks([]);
+    setResults([]);
+    setProcessingMode('sequential');
+    setCurrentStep(1);
+    setCompletedSteps([]);
+    setSubStep('3a');
   };
 
   if (status === 'loading') {
@@ -241,8 +332,6 @@ export default function BulkQueryApp() {
       </div>
     );
   }
-
-  const canSaveProject = rawText.trim().length > 0;
 
   return (
     <div className="max-w-app mx-auto p-8 min-h-screen">
@@ -292,14 +381,33 @@ export default function BulkQueryApp() {
         </div>
       )}
 
-      {/* Project History */}
+      {/* Project History + New Project */}
       <div className="mb-6">
         <ProjectHistory
           onLoad={loadProject}
-          onSave={saveProject}
           showToast={showToast}
-          canSave={canSaveProject}
+          currentProjectId={currentProjectId}
+          onRefreshRef={projectRefreshRef}
         />
+        {/* Current project indicator + New Project */}
+        <div className="mt-3 flex items-center justify-between">
+          <div className="text-sm text-gray-400">
+            {currentProjectId ? (
+              <>
+                Working on: <span className="text-gray-200 font-medium">{projectName}</span>
+                <span className="text-gray-600 ml-2">(auto-saving)</span>
+              </>
+            ) : (
+              <span className="text-gray-500">No project — will auto-create on next step</span>
+            )}
+          </div>
+          <Button variant="secondary" size="small" onClick={startNewProject}>
+            <span className="flex items-center gap-1">
+              <Plus size={14} />
+              New Project
+            </span>
+          </Button>
+        </div>
       </div>
 
       <StepIndicator
@@ -315,7 +423,7 @@ export default function BulkQueryApp() {
         <Step2TextInput
           rawText={rawText}
           setRawText={setRawText}
-          onNext={nextStep}
+          onNext={handleNextFromStep1}
           showToast={showToast}
           onAutoSave={handleAutoSave}
         />

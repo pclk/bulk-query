@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Scissors, Merge, CircleDot, BarChart3 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Scissors, Merge, CircleDot, BarChart3, X } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import { generateId, countWords, getSizeIndicator, computeChunkStats } from '@/lib/utils';
@@ -30,6 +30,23 @@ function SizeIcon({ size }: { size: ReturnType<typeof getSizeIndicator> }) {
   return <CircleDot size={20} className={colors[size]} />;
 }
 
+/** Split text into segments for interactive splitting */
+function getSegments(text: string): string[] {
+  // Try paragraphs first (double newline)
+  const byParagraph = text.split('\n\n').filter((s) => s.trim());
+  if (byParagraph.length > 1) return byParagraph;
+
+  // Fall back to single newlines
+  const byLine = text.split('\n').filter((s) => s.trim());
+  if (byLine.length > 1) return byLine;
+
+  // Fall back to sentences
+  const bySentence = text.split(/(?<=[.!?])\s+/).filter((s) => s.trim());
+  if (bySentence.length > 1) return bySentence;
+
+  return [text];
+}
+
 export default function Step3Chunking({
   rawText,
   taskPrompt,
@@ -43,7 +60,11 @@ export default function Step3Chunking({
 }: Step3Props) {
   const [selectedChunks, setSelectedChunks] = useState<string[]>([]);
   const [editingCtx, setEditingCtx] = useState<string | null>(null);
-  const [splittingChunk, setSplittingChunk] = useState<{ id: string; position: number } | null>(null);
+  // Interactive split state
+  const [splittingChunkId, setSplittingChunkId] = useState<string | null>(null);
+  const [splitAfterIndex, setSplitAfterIndex] = useState<number | null>(null);
+
+  const splitRef = useRef<HTMLDivElement>(null);
 
   const performChunking = async () => {
     setIsChunking(true);
@@ -84,6 +105,13 @@ export default function Step3Chunking({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Scroll to the chunk being split
+  useEffect(() => {
+    if (splittingChunkId && splitRef.current) {
+      splitRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [splittingChunkId]);
+
   const mergeChunks = () => {
     if (selectedChunks.length !== 2) {
       showToast('Please select exactly 2 adjacent chunks to merge');
@@ -122,26 +150,39 @@ export default function Step3Chunking({
 
   const startSplit = (chunkId: string) => {
     const chunk = chunks.find((c) => c.id === chunkId);
-    if (!chunk || chunk.wordCount < 100) {
-      showToast('Chunk too small to split');
+    if (!chunk) return;
+
+    const segments = getSegments(chunk.text);
+    if (segments.length < 2) {
+      showToast('Cannot split — text has no clear paragraph or sentence boundaries');
       return;
     }
-    setSplittingChunk({ id: chunkId, position: Math.floor(chunk.wordCount / 2) });
+
+    setSplittingChunkId(chunkId);
+    setSplitAfterIndex(null);
+  };
+
+  const cancelSplit = () => {
+    setSplittingChunkId(null);
+    setSplitAfterIndex(null);
   };
 
   const confirmSplit = () => {
-    if (!splittingChunk) return;
+    if (!splittingChunkId || splitAfterIndex === null) return;
 
-    const index = chunks.findIndex((c) => c.id === splittingChunk.id);
+    const index = chunks.findIndex((c) => c.id === splittingChunkId);
     const chunk = chunks[index];
-    const words = chunk.text.split(/\s+/);
-    const splitAt = splittingChunk.position;
+    const segments = getSegments(chunk.text);
 
-    const text1 = words.slice(0, splitAt).join(' ');
-    const text2 = words.slice(splitAt).join(' ');
+    const separator = chunk.text.includes('\n\n') ? '\n\n' : '\n';
+    const text1 = segments.slice(0, splitAfterIndex + 1).join(separator);
+    const text2 = segments.slice(splitAfterIndex + 1).join(separator);
 
+    const words1 = countWords(text1);
+    const words2 = countWords(text2);
+    const totalWords = words1 + words2;
     const lineRange = chunk.lines[1] - chunk.lines[0];
-    const splitLineOffset = Math.round(lineRange * (splitAt / words.length));
+    const splitLineOffset = Math.round(lineRange * (words1 / totalWords));
 
     const chunk1: Chunk = {
       id: generateId(),
@@ -151,7 +192,7 @@ export default function Step3Chunking({
       lines: [chunk.lines[0], chunk.lines[0] + splitLineOffset],
       ctx: chunk.ctx,
       text: text1,
-      wordCount: countWords(text1),
+      wordCount: words1,
     };
 
     const chunk2: Chunk = {
@@ -162,13 +203,13 @@ export default function Step3Chunking({
       lines: [chunk.lines[0] + splitLineOffset + 1, chunk.lines[1]],
       ctx: 'Continuation of ' + chunk.title,
       text: text2,
-      wordCount: countWords(text2),
+      wordCount: words2,
     };
 
     const newChunks = [...chunks];
     newChunks.splice(index, 1, chunk1, chunk2);
     setChunks(newChunks);
-    setSplittingChunk(null);
+    cancelSplit();
     showToast('Chunk split');
   };
 
@@ -211,6 +252,16 @@ export default function Step3Chunking({
   }
 
   const stats = computeChunkStats(chunks);
+
+  // Compute word counts for split preview
+  const getSplitPreview = (chunk: Chunk) => {
+    if (splitAfterIndex === null) return null;
+    const segments = getSegments(chunk.text);
+    const separator = chunk.text.includes('\n\n') ? '\n\n' : '\n';
+    const part1 = segments.slice(0, splitAfterIndex + 1).join(separator);
+    const part2 = segments.slice(splitAfterIndex + 1).join(separator);
+    return { words1: countWords(part1), words2: countWords(part2) };
+  };
 
   return (
     <div>
@@ -275,45 +326,43 @@ export default function Step3Chunking({
             <div className="flex flex-col gap-2 max-h-[600px] overflow-y-auto">
               {chunks.map((chunk) => {
                 const isSelected = selectedChunks.includes(chunk.id);
+                const isSplitting = splittingChunkId === chunk.id;
                 const indicator = getSizeIndicator(chunk.wordCount);
 
                 return (
                   <div
                     key={chunk.id}
                     className={`p-3 rounded-md cursor-pointer border-2 transition-colors ${
-                      isSelected
-                        ? 'bg-[#3a3a5a] border-accent'
-                        : 'bg-surface-light border-transparent'
+                      isSplitting
+                        ? 'bg-[#2a2a4a] border-amber-500'
+                        : isSelected
+                          ? 'bg-[#3a3a5a] border-accent'
+                          : 'bg-surface-light border-transparent'
                     }`}
-                    onClick={() => toggleChunkSelection(chunk.id)}
+                    onClick={() => !isSplitting && toggleChunkSelection(chunk.id)}
                   >
                     <div className="flex justify-between items-center mb-1">
                       <span className="text-sm font-semibold">{chunk.title}</span>
                       <SizeIcon size={indicator} />
                     </div>
                     <div className="text-xs text-gray-400">{chunk.wordCount} words</div>
-                    {splittingChunk?.id === chunk.id ? (
-                      <div className="mt-2 space-y-2" onClick={(e) => e.stopPropagation()}>
-                        <div className="text-xs text-gray-300 flex justify-between">
-                          <span>{splittingChunk.position}w</span>
-                          <span>{chunk.wordCount - splittingChunk.position}w</span>
-                        </div>
-                        <input
-                          type="range"
-                          min={50}
-                          max={chunk.wordCount - 50}
-                          value={splittingChunk.position}
-                          onChange={(e) => setSplittingChunk({ ...splittingChunk, position: Number(e.target.value) })}
-                          className="w-full accent-accent"
-                        />
-                        <div className="flex gap-1">
-                          <Button variant="primary" size="small" className="flex-1" onClick={confirmSplit}>
-                            Split
-                          </Button>
-                          <Button variant="secondary" size="small" className="flex-1" onClick={() => setSplittingChunk(null)}>
+                    {isSplitting ? (
+                      <div className="mt-2 flex gap-1" onClick={(e) => e.stopPropagation()}>
+                        <Button
+                          variant="primary"
+                          size="small"
+                          className="flex-1"
+                          onClick={confirmSplit}
+                          disabled={splitAfterIndex === null}
+                        >
+                          Confirm Split
+                        </Button>
+                        <Button variant="secondary" size="small" className="flex-1" onClick={cancelSplit}>
+                          <span className="flex items-center justify-center gap-1">
+                            <X size={14} />
                             Cancel
-                          </Button>
-                        </div>
+                          </span>
+                        </Button>
                       </div>
                     ) : (
                       <Button
@@ -343,61 +392,141 @@ export default function Step3Chunking({
           <h2 className="text-xl font-semibold mb-4 text-gray-100">Review & Adjust Chunks</h2>
           <p className="mb-6 text-gray-400">
             Click chunks in the sidebar to select them. Select 2 adjacent chunks to merge, or click
-            Split to divide a chunk.
+            Split to divide a chunk by clicking between paragraphs.
           </p>
 
           <div className="mb-6">
-            {chunks.map((chunk, index) => (
-              <div key={chunk.id} className="mb-8">
-                <div className="flex justify-between items-center mb-2 p-3 bg-surface-light rounded-md">
-                  <input
-                    type="text"
-                    value={chunk.title}
-                    onChange={(e) => updateChunkTitle(chunk.id, e.target.value)}
-                    className="bg-transparent border-none text-gray-200 text-base font-semibold flex-1 focus:outline-none"
-                  />
-                  <span className="text-sm text-gray-400 flex items-center gap-2">
-                    {chunk.wordCount} words
-                    <SizeIcon size={getSizeIndicator(chunk.wordCount)} />
-                  </span>
-                </div>
+            {chunks.map((chunk, index) => {
+              const isSplitting = splittingChunkId === chunk.id;
+              const segments = isSplitting ? getSegments(chunk.text) : [];
+              const preview = isSplitting ? getSplitPreview(chunk) : null;
 
-                {chunk.ctx && (
-                  <div className="p-3 bg-[#1a2a3a] rounded-md mb-2 text-sm italic text-[#a0c0e0]">
-                    Context:{' '}
-                    {editingCtx === chunk.id ? (
-                      <input
-                        type="text"
-                        value={chunk.ctx}
-                        onChange={(e) => updateChunkCtx(chunk.id, e.target.value)}
-                        onBlur={() => setEditingCtx(null)}
-                        autoFocus
-                        className="bg-[#2a3a4a] border border-[#3a4a5a] text-gray-200 px-2 py-1 rounded w-full mt-1 focus:outline-none"
-                      />
-                    ) : (
-                      <span
-                        onClick={() => setEditingCtx(chunk.id)}
-                        className="cursor-pointer"
-                      >
-                        {chunk.ctx}
-                      </span>
-                    )}
+              return (
+                <div key={chunk.id} className="mb-8" ref={isSplitting ? splitRef : undefined}>
+                  <div className="flex justify-between items-center mb-2 p-3 bg-surface-light rounded-md">
+                    <input
+                      type="text"
+                      value={chunk.title}
+                      onChange={(e) => updateChunkTitle(chunk.id, e.target.value)}
+                      className="bg-transparent border-none text-gray-200 text-base font-semibold flex-1 focus:outline-none"
+                    />
+                    <span className="text-sm text-gray-400 flex items-center gap-2">
+                      {chunk.wordCount} words
+                      <SizeIcon size={getSizeIndicator(chunk.wordCount)} />
+                    </span>
                   </div>
-                )}
 
-                <div className="p-4 bg-surface rounded-md font-mono text-sm leading-relaxed whitespace-pre-wrap max-h-[200px] overflow-y-auto">
-                  {chunk.text}
-                </div>
-
-                {index < chunks.length - 1 && (
-                  <div className="h-0.5 bg-gradient-to-r from-transparent via-accent to-transparent my-6 relative">
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-surface-dark px-3 py-1 text-xs text-accent">
-                      CHUNK BREAK
+                  {chunk.ctx && !isSplitting && (
+                    <div className="p-3 bg-[#1a2a3a] rounded-md mb-2 text-sm italic text-[#a0c0e0]">
+                      Context:{' '}
+                      {editingCtx === chunk.id ? (
+                        <input
+                          type="text"
+                          value={chunk.ctx}
+                          onChange={(e) => updateChunkCtx(chunk.id, e.target.value)}
+                          onBlur={() => setEditingCtx(null)}
+                          autoFocus
+                          className="bg-[#2a3a4a] border border-[#3a4a5a] text-gray-200 px-2 py-1 rounded w-full mt-1 focus:outline-none"
+                        />
+                      ) : (
+                        <span
+                          onClick={() => setEditingCtx(chunk.id)}
+                          className="cursor-pointer"
+                        >
+                          {chunk.ctx}
+                        </span>
+                      )}
                     </div>
-                  </div>
-                )}
-              </div>
-            ))}
+                  )}
+
+                  {isSplitting ? (
+                    /* Interactive split mode */
+                    <div className="rounded-md border-2 border-amber-500/50 overflow-hidden">
+                      {/* Split mode header */}
+                      <div className="bg-amber-500/10 px-4 py-2 text-sm text-amber-200 flex justify-between items-center">
+                        <span>Click between paragraphs to set split point</span>
+                        {preview && (
+                          <span className="font-mono text-xs">
+                            Part 1: <strong>{preview.words1}w</strong> | Part 2: <strong>{preview.words2}w</strong>
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="p-4 bg-surface">
+                        {segments.map((segment, segIdx) => (
+                          <div key={segIdx}>
+                            {/* Paragraph text */}
+                            <div
+                              className={`font-mono text-sm leading-relaxed whitespace-pre-wrap px-3 py-2 rounded transition-colors ${
+                                splitAfterIndex !== null && segIdx <= splitAfterIndex
+                                  ? 'bg-[#1a2a3a]'
+                                  : splitAfterIndex !== null && segIdx > splitAfterIndex
+                                    ? 'bg-[#2a1a2a]'
+                                    : ''
+                              }`}
+                            >
+                              {segment}
+                            </div>
+
+                            {/* Clickable split divider between paragraphs */}
+                            {segIdx < segments.length - 1 && (
+                              <div
+                                className={`my-1 py-2 cursor-pointer group relative flex items-center transition-all ${
+                                  splitAfterIndex === segIdx
+                                    ? ''
+                                    : 'hover:bg-amber-500/5'
+                                }`}
+                                onClick={() => setSplitAfterIndex(segIdx)}
+                              >
+                                <div
+                                  className={`w-full h-0.5 transition-colors ${
+                                    splitAfterIndex === segIdx
+                                      ? 'bg-amber-500'
+                                      : 'bg-transparent group-hover:bg-amber-500/40'
+                                  }`}
+                                />
+                                <div
+                                  className={`absolute left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full text-xs transition-all whitespace-nowrap ${
+                                    splitAfterIndex === segIdx
+                                      ? 'bg-amber-500 text-black font-semibold'
+                                      : 'bg-surface-light text-gray-500 group-hover:text-amber-300 group-hover:bg-amber-500/20'
+                                  }`}
+                                >
+                                  {splitAfterIndex === segIdx ? (
+                                    <span className="flex items-center gap-1">
+                                      <Scissors size={12} />
+                                      Split here
+                                    </span>
+                                  ) : (
+                                    <span className="flex items-center gap-1">
+                                      <Scissors size={10} />
+                                      Click to split
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    /* Normal text display */
+                    <div className="p-4 bg-surface rounded-md font-mono text-sm leading-relaxed whitespace-pre-wrap max-h-[200px] overflow-y-auto">
+                      {chunk.text}
+                    </div>
+                  )}
+
+                  {index < chunks.length - 1 && (
+                    <div className="h-0.5 bg-gradient-to-r from-transparent via-accent to-transparent my-6 relative">
+                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-surface-dark px-3 py-1 text-xs text-accent">
+                        CHUNK BREAK
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
           <div className="flex justify-between">

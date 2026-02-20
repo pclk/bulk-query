@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { FolderOpen, Trash2, Clock, Save } from 'lucide-react';
+import { useState, useEffect, useCallback, type MutableRefObject } from 'react';
+import { FolderOpen, Trash2, Clock } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import type { Chunk, ProcessingResult } from '@/lib/schemas/task';
@@ -23,19 +23,16 @@ interface ProjectFull extends ProjectSummary {
 
 interface ProjectHistoryProps {
   onLoad: (project: ProjectFull) => void;
-  onSave: (name: string) => Promise<void>;
   showToast: (message: string, error?: unknown) => void;
-  canSave: boolean;
+  currentProjectId: string | null;
+  onRefreshRef: MutableRefObject<(() => void) | null>;
 }
 
-export default function ProjectHistory({ onLoad, onSave, showToast, canSave }: ProjectHistoryProps) {
+export default function ProjectHistory({ onLoad, showToast, currentProjectId, onRefreshRef }: ProjectHistoryProps) {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [showNameInput, setShowNameInput] = useState(false);
-  const [projectName, setProjectName] = useState('');
 
-  const fetchProjects = async () => {
+  const fetchProjects = useCallback(async () => {
     try {
       const res = await fetch('/api/projects');
       if (res.ok) {
@@ -47,11 +44,17 @@ export default function ProjectHistory({ onLoad, onSave, showToast, canSave }: P
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchProjects();
-  }, []);
+  }, [fetchProjects]);
+
+  // Expose refresh function to parent
+  useEffect(() => {
+    onRefreshRef.current = fetchProjects;
+    return () => { onRefreshRef.current = null; };
+  }, [fetchProjects, onRefreshRef]);
 
   const loadProject = async (id: string) => {
     try {
@@ -76,97 +79,90 @@ export default function ProjectHistory({ onLoad, onSave, showToast, canSave }: P
     }
   };
 
-  const handleSave = async () => {
-    if (!projectName.trim()) {
-      showToast('Enter a project name');
-      return;
-    }
-    setSaving(true);
-    await onSave(projectName.trim());
-    setProjectName('');
-    setShowNameInput(false);
-    setSaving(false);
-    fetchProjects();
-  };
+  if (loading) {
+    return (
+      <Card>
+        <div className="flex items-center gap-2 mb-4">
+          <FolderOpen size={18} className="text-accent" />
+          <h3 className="text-base font-semibold">Projects</h3>
+        </div>
+        <div className="text-sm text-gray-500 text-center py-4">Loading...</div>
+      </Card>
+    );
+  }
+
+  if (projects.length === 0) {
+    return (
+      <Card>
+        <div className="flex items-center gap-2 mb-2">
+          <FolderOpen size={18} className="text-accent" />
+          <h3 className="text-base font-semibold">Projects</h3>
+        </div>
+        <div className="text-sm text-gray-500 text-center py-3">
+          No projects yet. Start typing to auto-create one.
+        </div>
+      </Card>
+    );
+  }
 
   return (
     <Card>
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-base font-semibold flex items-center gap-2">
-          <FolderOpen size={18} className="text-accent" />
-          Projects
-        </h3>
-        {canSave && (
-          <Button
-            size="small"
-            onClick={() => setShowNameInput(!showNameInput)}
-          >
-            <span className="flex items-center gap-1">
-              <Save size={14} />
-              Save
-            </span>
-          </Button>
-        )}
+      <div className="flex items-center gap-2 mb-4">
+        <FolderOpen size={18} className="text-accent" />
+        <h3 className="text-base font-semibold">Projects ({projects.length})</h3>
       </div>
 
-      {showNameInput && (
-        <div className="mb-4 flex gap-2">
-          <input
-            type="text"
-            value={projectName}
-            onChange={(e) => setProjectName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSave()}
-            placeholder="Project name..."
-            className="flex-1 p-2 bg-surface-dark border-2 border-surface-light rounded-lg text-gray-200 text-sm focus:outline-none focus:border-accent"
-            autoFocus
-          />
-          <Button size="small" onClick={handleSave} disabled={saving}>
-            {saving ? '...' : 'Save'}
-          </Button>
-        </div>
-      )}
+      <div className="flex flex-col gap-2 max-h-[240px] overflow-y-auto">
+        {projects.map((project) => {
+          const isActive = project.id === currentProjectId;
 
-      {loading && (
-        <div className="text-sm text-gray-500 text-center py-4">Loading...</div>
-      )}
-
-      {!loading && projects.length === 0 && (
-        <div className="text-sm text-gray-500 text-center py-4">
-          No saved projects yet.
-        </div>
-      )}
-
-      <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto">
-        {projects.map((project) => (
-          <div
-            key={project.id}
-            className="p-3 bg-surface-light rounded-md flex justify-between items-center group"
-          >
-            <div className="flex-1 min-w-0 mr-3">
-              <div className="text-sm font-medium truncate">{project.name}</div>
-              <div className="text-xs text-gray-500 flex items-center gap-1 mt-1">
-                <Clock size={10} />
-                {new Date(project.updatedAt).toLocaleDateString()}
+          return (
+            <div
+              key={project.id}
+              className={`p-3 rounded-md flex justify-between items-center group transition-colors ${
+                isActive
+                  ? 'bg-accent/10 border border-accent/30'
+                  : 'bg-surface-light hover:bg-surface-light/80'
+              }`}
+            >
+              <div className="flex-1 min-w-0 mr-3">
+                <div className="flex items-center gap-2">
+                  <div className={`text-sm font-medium truncate ${isActive ? 'text-accent' : ''}`}>
+                    {project.name}
+                  </div>
+                  {isActive && (
+                    <span className="text-[10px] bg-accent/20 text-accent px-1.5 py-0.5 rounded-full whitespace-nowrap">
+                      active
+                    </span>
+                  )}
+                </div>
+                <div className="text-xs text-gray-500 flex items-center gap-1 mt-1">
+                  <Clock size={10} />
+                  {new Date(project.updatedAt).toLocaleDateString()}{' '}
+                  {new Date(project.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </div>
+              </div>
+              <div className="flex gap-1">
+                {!isActive && (
+                  <Button
+                    variant="secondary"
+                    size="small"
+                    onClick={() => loadProject(project.id)}
+                  >
+                    Load
+                  </Button>
+                )}
+                <Button
+                  variant="danger"
+                  size="small"
+                  onClick={() => deleteProject(project.id, project.name)}
+                >
+                  <Trash2 size={14} />
+                </Button>
               </div>
             </div>
-            <div className="flex gap-1">
-              <Button
-                variant="secondary"
-                size="small"
-                onClick={() => loadProject(project.id)}
-              >
-                Load
-              </Button>
-              <Button
-                variant="danger"
-                size="small"
-                onClick={() => deleteProject(project.id, project.name)}
-              >
-                <Trash2 size={14} />
-              </Button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </Card>
   );
