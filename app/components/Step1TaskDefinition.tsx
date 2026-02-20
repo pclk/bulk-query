@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Save, Trash2 } from 'lucide-react';
+import { Save, Trash2, CheckCircle } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import Textarea from '@/components/ui/Textarea';
@@ -20,8 +20,8 @@ interface Step1Props {
   setTaskPrompt: (prompt: string) => void;
   savedTemplates: Template[];
   setSavedTemplates: React.Dispatch<React.SetStateAction<Template[]>>;
-  onNext: () => void;
   showToast: (message: string) => void;
+  onProceedToProcess?: () => void;
 }
 
 export default function Step1TaskDefinition({
@@ -29,8 +29,8 @@ export default function Step1TaskDefinition({
   setTaskPrompt,
   savedTemplates,
   setSavedTemplates,
-  onNext,
   showToast,
+  onProceedToProcess,
 }: Step1Props) {
   const [templateName, setTemplateName] = useState('');
   const [showSaveDialog, setShowSaveDialog] = useState(false);
@@ -65,20 +65,13 @@ export default function Step1TaskDefinition({
     showToast('Template deleted');
   };
 
-  const handleNext = () => {
-    if (!taskPrompt.trim()) {
-      showToast('Please enter a task prompt');
-      return;
-    }
-    onNext();
-  };
-
   return (
     <div>
       <Card>
-        <h2 className="text-xl font-semibold mb-4 text-gray-100">Define Your Task</h2>
+        <h2 className="text-xl font-semibold mb-2 text-gray-100">Define Your Task</h2>
         <p className="mb-6 text-gray-400">
-          Describe what you want to do with your text (e.g., translate, summarize, create flashcards)
+          Describe what you want the AI to do with each chunk (e.g., translate, summarize, create flashcards).
+          This is required if you want to use API processing in step 4.
         </p>
 
         <div className="mb-6">
@@ -104,6 +97,14 @@ export default function Step1TaskDefinition({
           className="mb-4"
         />
 
+        {/* Task saved indicator */}
+        {taskPrompt.trim() && (
+          <div className="mb-4 flex items-center gap-2 text-sm text-emerald-400">
+            <CheckCircle size={14} />
+            Task prompt set &mdash; you can now proceed to Process &amp; Export (step 4).
+          </div>
+        )}
+
         <div className="flex gap-4 mb-6">
           <Button
             variant="secondary"
@@ -115,6 +116,11 @@ export default function Step1TaskDefinition({
               Save as Template
             </span>
           </Button>
+          {taskPrompt.trim() && onProceedToProcess && (
+            <Button size="small" onClick={onProceedToProcess}>
+              Proceed to Process &amp; Export &rarr;
+            </Button>
+          )}
         </div>
 
         {showSaveDialog && (
@@ -166,10 +172,6 @@ export default function Step1TaskDefinition({
             </div>
           </div>
         )}
-
-        <div className="flex justify-end">
-          <Button onClick={handleNext}>Next &rarr;</Button>
-        </div>
       </Card>
     </div>
   );

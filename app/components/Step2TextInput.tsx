@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect, useRef, useState } from 'react';
+import { Save, CheckCircle } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import Textarea from '@/components/ui/Textarea';
@@ -9,16 +11,51 @@ interface Step2Props {
   rawText: string;
   setRawText: (text: string) => void;
   onNext: () => void;
-  onBack: () => void;
   showToast: (message: string) => void;
+  onAutoSave?: (text: string) => void;
+  saveStatus?: 'idle' | 'saving' | 'saved';
 }
 
-export default function Step2TextInput({ rawText, setRawText, onNext, onBack, showToast }: Step2Props) {
+export default function Step2TextInput({
+  rawText,
+  setRawText,
+  onNext,
+  showToast,
+  onAutoSave,
+  saveStatus = 'idle',
+}: Step2Props) {
   const wordCount = countWords(rawText);
   const wordStatus = getWordCountStatus(wordCount);
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const [localSaveStatus, setLocalSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+
+  const effectiveSaveStatus = saveStatus !== 'idle' ? saveStatus : localSaveStatus;
+
+  // Debounced auto-save to server via onAutoSave callback
+  useEffect(() => {
+    if (!rawText.trim()) return;
+
+    setLocalSaveStatus('saving');
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      if (onAutoSave) {
+        onAutoSave(rawText);
+      }
+      setLocalSaveStatus('saved');
+    }, 2000);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [rawText, onAutoSave]);
 
   const handleClear = () => {
     setRawText('');
+    setLocalSaveStatus('idle');
+    if (onAutoSave) {
+      onAutoSave('');
+    }
     showToast('Text cleared');
   };
 
@@ -39,7 +76,8 @@ export default function Step2TextInput({ rawText, setRawText, onNext, onBack, sh
       <Card>
         <h2 className="text-xl font-semibold mb-4 text-gray-100">Input Your Text</h2>
         <p className="mb-6 text-gray-400">
-          Paste the text you want to process (recommended: 1,000-6,000 words)
+          Paste the text you want to process (recommended: 1,000&ndash;6,000 words).
+          Your text is auto-saved to your account as you type.
         </p>
 
         <div className="mb-4 flex justify-between items-center">
@@ -51,9 +89,28 @@ export default function Step2TextInput({ rawText, setRawText, onNext, onBack, sh
               {wordStatus.message}
             </span>
           </div>
-          <Button variant="secondary" size="small" onClick={handleClear}>
-            Clear
-          </Button>
+          <div className="flex items-center gap-3">
+            {/* Auto-save status indicator */}
+            {rawText.trim() && (
+              <span className="flex items-center gap-1 text-xs text-gray-500">
+                {effectiveSaveStatus === 'saving' && (
+                  <>
+                    <Save size={12} className="animate-pulse" />
+                    Saving...
+                  </>
+                )}
+                {effectiveSaveStatus === 'saved' && (
+                  <>
+                    <CheckCircle size={12} className="text-emerald-500" />
+                    Draft saved
+                  </>
+                )}
+              </span>
+            )}
+            <Button variant="secondary" size="small" onClick={handleClear}>
+              Clear
+            </Button>
+          </div>
         </div>
 
         <Textarea
@@ -64,10 +121,7 @@ export default function Step2TextInput({ rawText, setRawText, onNext, onBack, sh
           className="mb-6"
         />
 
-        <div className="flex justify-between">
-          <Button variant="secondary" onClick={onBack}>
-            &larr; Back
-          </Button>
+        <div className="flex justify-end">
           <Button onClick={handleNext}>Chunk Text &rarr;</Button>
         </div>
       </Card>
