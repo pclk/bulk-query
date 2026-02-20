@@ -33,7 +33,7 @@ export type Chunk = z.infer<typeof chunkSchema>;
 
 export const chunkRequestSchema = z.object({
   text: z.string().min(1),
-  taskPrompt: z.string().min(1),
+  taskPrompt: z.string().optional(),
 });
 
 export const processRequestSchema = z.object({

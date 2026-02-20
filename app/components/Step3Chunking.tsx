@@ -58,7 +58,7 @@ export default function Step3Chunking({
           'Content-Type': 'application/json',
           ...(apiKey ? { 'x-api-key': apiKey, 'x-model': model } : {}),
         },
-        body: JSON.stringify({ text: rawText, taskPrompt }),
+        body: JSON.stringify({ text: rawText, ...(taskPrompt ? { taskPrompt } : {}) }),
       });
 
       const data = await res.json();
