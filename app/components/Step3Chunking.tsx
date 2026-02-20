@@ -43,6 +43,7 @@ export default function Step3Chunking({
 }: Step3Props) {
   const [selectedChunks, setSelectedChunks] = useState<string[]>([]);
   const [editingCtx, setEditingCtx] = useState<string | null>(null);
+  const [splittingChunk, setSplittingChunk] = useState<{ id: string; position: number } | null>(null);
 
   const performChunking = async () => {
     setIsChunking(true);
@@ -119,26 +120,35 @@ export default function Step3Chunking({
     showToast('Chunks merged');
   };
 
-  const splitChunk = (chunkId: string) => {
-    const index = chunks.findIndex((c) => c.id === chunkId);
-    const chunk = chunks[index];
-
-    if (chunk.wordCount < 100) {
+  const startSplit = (chunkId: string) => {
+    const chunk = chunks.find((c) => c.id === chunkId);
+    if (!chunk || chunk.wordCount < 100) {
       showToast('Chunk too small to split');
       return;
     }
+    setSplittingChunk({ id: chunkId, position: Math.floor(chunk.wordCount / 2) });
+  };
 
+  const confirmSplit = () => {
+    if (!splittingChunk) return;
+
+    const index = chunks.findIndex((c) => c.id === splittingChunk.id);
+    const chunk = chunks[index];
     const words = chunk.text.split(/\s+/);
-    const midPoint = Math.floor(words.length / 2);
-    const text1 = words.slice(0, midPoint).join(' ');
-    const text2 = words.slice(midPoint).join(' ');
+    const splitAt = splittingChunk.position;
+
+    const text1 = words.slice(0, splitAt).join(' ');
+    const text2 = words.slice(splitAt).join(' ');
+
+    const lineRange = chunk.lines[1] - chunk.lines[0];
+    const splitLineOffset = Math.round(lineRange * (splitAt / words.length));
 
     const chunk1: Chunk = {
       id: generateId(),
       title: chunk.title + ' (Part 1)',
       start: chunk.start,
       end: text1.split(/\s+/).slice(-7).join(' '),
-      lines: [chunk.lines[0], chunk.lines[0] + Math.floor((chunk.lines[1] - chunk.lines[0]) / 2)],
+      lines: [chunk.lines[0], chunk.lines[0] + splitLineOffset],
       ctx: chunk.ctx,
       text: text1,
       wordCount: countWords(text1),
@@ -149,7 +159,7 @@ export default function Step3Chunking({
       title: chunk.title + ' (Part 2)',
       start: text2.split(/\s+/).slice(0, 7).join(' '),
       end: chunk.end,
-      lines: [chunk1.lines[1] + 1, chunk.lines[1]],
+      lines: [chunk.lines[0] + splitLineOffset + 1, chunk.lines[1]],
       ctx: 'Continuation of ' + chunk.title,
       text: text2,
       wordCount: countWords(text2),
@@ -158,6 +168,7 @@ export default function Step3Chunking({
     const newChunks = [...chunks];
     newChunks.splice(index, 1, chunk1, chunk2);
     setChunks(newChunks);
+    setSplittingChunk(null);
     showToast('Chunk split');
   };
 
@@ -210,7 +221,7 @@ export default function Step3Chunking({
             <BarChart3 size={18} className="text-accent" />
             <h3 className="text-base font-semibold">Chunk Statistics</h3>
           </div>
-          <div className="grid grid-cols-3 gap-4 sm:grid-cols-6">
+          <div className="grid grid-cols-3 gap-4 sm:grid-cols-4 lg:grid-cols-7">
             <div className="text-center">
               <div className="text-2xl font-bold text-gray-100">{stats.count}</div>
               <div className="text-xs text-gray-400">Chunks</div>
@@ -232,8 +243,12 @@ export default function Step3Chunking({
               <div className="text-xs text-gray-400">Max Words</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-gray-100">~{(stats.estimatedInputTokens + stats.estimatedOutputTokens).toLocaleString()}</div>
-              <div className="text-xs text-gray-400">Est. Tokens (I/O)</div>
+              <div className="text-2xl font-bold text-[#7dd3fc]">~{stats.estimatedInputTokens.toLocaleString()}</div>
+              <div className="text-xs text-gray-400">Input Tokens</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-[#c4b5fd]">~{stats.estimatedOutputTokens.toLocaleString()}</div>
+              <div className="text-xs text-gray-400">Output Tokens</div>
             </div>
           </div>
         </Card>
@@ -277,20 +292,45 @@ export default function Step3Chunking({
                       <SizeIcon size={indicator} />
                     </div>
                     <div className="text-xs text-gray-400">{chunk.wordCount} words</div>
-                    <Button
-                      variant="secondary"
-                      size="small"
-                      className="mt-2 w-full"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        splitChunk(chunk.id);
-                      }}
-                    >
-                      <span className="flex items-center justify-center gap-1">
-                        <Scissors size={14} />
-                        Split
-                      </span>
-                    </Button>
+                    {splittingChunk?.id === chunk.id ? (
+                      <div className="mt-2 space-y-2" onClick={(e) => e.stopPropagation()}>
+                        <div className="text-xs text-gray-300 flex justify-between">
+                          <span>{splittingChunk.position}w</span>
+                          <span>{chunk.wordCount - splittingChunk.position}w</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={50}
+                          max={chunk.wordCount - 50}
+                          value={splittingChunk.position}
+                          onChange={(e) => setSplittingChunk({ ...splittingChunk, position: Number(e.target.value) })}
+                          className="w-full accent-accent"
+                        />
+                        <div className="flex gap-1">
+                          <Button variant="primary" size="small" className="flex-1" onClick={confirmSplit}>
+                            Split
+                          </Button>
+                          <Button variant="secondary" size="small" className="flex-1" onClick={() => setSplittingChunk(null)}>
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <Button
+                        variant="secondary"
+                        size="small"
+                        className="mt-2 w-full"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          startSplit(chunk.id);
+                        }}
+                      >
+                        <span className="flex items-center justify-center gap-1">
+                          <Scissors size={14} />
+                          Split
+                        </span>
+                      </Button>
+                    )}
                   </div>
                 );
               })}
