@@ -151,15 +151,25 @@ export default function Step3SequentialCopy({
 
   return (
     <div>
+      {/* Top navigation */}
+      <div className="flex justify-between items-center mb-4">
+        <Button variant="secondary" size="small" onClick={onBack}>
+          <span className="flex items-center gap-1">
+            <ChevronLeft size={14} />
+            Back
+          </span>
+        </Button>
+        <span className="text-sm text-gray-400">
+          {copiedCount} / {chunks.length} copied
+        </span>
+      </div>
+
       {/* Info banner */}
-      <div className="mb-4 p-4 bg-[#1a2a3a] border border-[#2a3a5a] rounded-lg">
-        <div className="flex items-start gap-3">
-          <Info size={18} className="text-[#a0c0e0] mt-0.5 shrink-0" />
-          <div className="text-sm text-[#a0c0e0]">
-            <strong>Sequential Copy</strong> lets you walk through your chunks one at a time and
-            copy each to your clipboard &mdash; perfect for pasting into your preferred AI chatbot
-            (ChatGPT, Gemini, Claude, etc.) without needing an API key for processing.
-            The API key is still required for the initial chunking step.
+      <div className="mb-4 p-3 bg-[#1a2a3a] border border-[#2a3a5a] rounded-lg">
+        <div className="flex items-start gap-2">
+          <Info size={14} className="text-[#a0c0e0] mt-0.5 shrink-0" />
+          <div className="text-xs text-[#a0c0e0]">
+            Walk through chunks and copy each to clipboard for pasting into your preferred AI chatbot.
           </div>
         </div>
       </div>
@@ -230,14 +240,14 @@ export default function Step3SequentialCopy({
       )}
 
       <div className="grid grid-cols-[280px_1fr] gap-4">
-        {/* Left pane: Chunk list */}
-        <Card className="p-0 overflow-hidden">
+        {/* Left pane: Chunk list — sticky */}
+        <Card className="p-0 overflow-hidden sticky top-4 self-start">
           <div className="p-3 border-b border-surface-lighter">
             <h3 className="text-sm font-semibold text-gray-300">Chunks ({chunks.length})</h3>
           </div>
           <div
             ref={chunkListRef}
-            className="flex flex-col gap-0 max-h-[600px] overflow-y-auto"
+            className="flex flex-col gap-0 max-h-[calc(100vh-180px)] overflow-y-auto"
           >
             {chunks.map((chunk, index) => {
               const isActive = index === activeIndex;

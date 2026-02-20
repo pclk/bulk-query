@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Scissors, Merge, CircleDot, BarChart3, X } from 'lucide-react';
+import { Scissors, Merge, CircleDot, BarChart3, X, ChevronLeft, ChevronRight, DollarSign } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
-import { generateId, countWords, getSizeIndicator, computeChunkStats } from '@/lib/utils';
+import { generateId, countWords, getSizeIndicator, computeChunkStats, estimateCost, formatCost } from '@/lib/utils';
 import { getStoredApiKey, getStoredModel } from './ApiKeySettings';
 import type { Chunk } from '@/lib/schemas/task';
 
@@ -252,6 +252,9 @@ export default function Step3Chunking({
   }
 
   const stats = computeChunkStats(chunks);
+  const model = getStoredModel();
+  const estInputTokens = Math.round(stats.estimatedTokens / 2);
+  const estCost = estimateCost(estInputTokens, estInputTokens, model);
 
   // Compute word counts for split preview
   const getSplitPreview = (chunk: Chunk) => {
@@ -265,49 +268,49 @@ export default function Step3Chunking({
 
   return (
     <div>
+      {/* Top navigation */}
+      <div className="flex justify-between items-center mb-4">
+        <Button variant="secondary" size="small" onClick={onBack}>
+          <span className="flex items-center gap-1">
+            <ChevronLeft size={14} />
+            Back
+          </span>
+        </Button>
+        <Button size="small" onClick={handleNext}>
+          <span className="flex items-center gap-1">
+            Next
+            <ChevronRight size={14} />
+          </span>
+        </Button>
+      </div>
+
       {/* Summary Statistics */}
       {chunks.length > 0 && (
-        <Card className="mb-6">
-          <div className="flex items-center gap-2 mb-4">
-            <BarChart3 size={18} className="text-accent" />
-            <h3 className="text-base font-semibold">Chunk Statistics</h3>
-          </div>
-          <div className="grid grid-cols-3 gap-4 sm:grid-cols-4 lg:grid-cols-7">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-gray-100">{stats.count}</div>
-              <div className="text-xs text-gray-400">Chunks</div>
+        <Card className="mb-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <BarChart3 size={16} className="text-accent" />
+              <span className="text-sm font-semibold">Stats</span>
             </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-gray-100">{stats.totalWords.toLocaleString()}</div>
-              <div className="text-xs text-gray-400">Total Words</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-gray-100">{stats.avgWords.toLocaleString()}</div>
-              <div className="text-xs text-gray-400">Avg Words</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-gray-100">{stats.minWords.toLocaleString()}</div>
-              <div className="text-xs text-gray-400">Min Words</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-gray-100">{stats.maxWords.toLocaleString()}</div>
-              <div className="text-xs text-gray-400">Max Words</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-[#7dd3fc]">~{stats.estimatedInputTokens.toLocaleString()}</div>
-              <div className="text-xs text-gray-400">Input Tokens</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-[#c4b5fd]">~{stats.estimatedOutputTokens.toLocaleString()}</div>
-              <div className="text-xs text-gray-400">Output Tokens</div>
+            <div className="flex items-center gap-5 text-sm">
+              <span><strong className="text-gray-100">{stats.count}</strong> <span className="text-gray-500">chunks</span></span>
+              <span><strong className="text-gray-100">{stats.totalWords.toLocaleString()}</strong> <span className="text-gray-500">words</span></span>
+              <span><strong className="text-gray-100">{stats.avgWords.toLocaleString()}</strong> <span className="text-gray-500">avg</span></span>
+              <span><strong className="text-gray-100">{stats.minWords.toLocaleString()}</strong><span className="text-gray-500">–</span><strong className="text-gray-100">{stats.maxWords.toLocaleString()}</strong> <span className="text-gray-500">range</span></span>
+              <span><strong className="text-[#7dd3fc]">~{stats.estimatedTokens.toLocaleString()}</strong> <span className="text-gray-500">tokens</span></span>
+              <span className="flex items-center gap-0.5">
+                <DollarSign size={12} className="text-emerald-400" />
+                <strong className="text-emerald-400">{formatCost(estCost)}</strong>
+                <span className="text-gray-500 text-xs ml-0.5">est.</span>
+              </span>
             </div>
           </div>
         </Card>
       )}
 
-      <div className="grid grid-cols-[300px_1fr] gap-6">
-        {/* Chunk Sidebar */}
-        <div>
+      <div className="grid grid-cols-[280px_1fr] gap-5">
+        {/* Chunk Sidebar — sticky */}
+        <div className="sticky top-4 self-start">
           <Card>
             <h3 className="text-base font-semibold mb-4">Chunks ({chunks.length})</h3>
             <div className="flex gap-2 mb-4">
@@ -323,7 +326,7 @@ export default function Step3Chunking({
                 </span>
               </Button>
             </div>
-            <div className="flex flex-col gap-2 max-h-[600px] overflow-y-auto">
+            <div className="flex flex-col gap-2 max-h-[calc(100vh-220px)] overflow-y-auto">
               {chunks.map((chunk) => {
                 const isSelected = selectedChunks.includes(chunk.id);
                 const isSplitting = splittingChunkId === chunk.id;
@@ -531,9 +534,11 @@ export default function Step3Chunking({
 
           <div className="flex justify-between">
             <Button variant="secondary" onClick={onBack}>
-              &larr; Back
+              <span className="flex items-center gap-1"><ChevronLeft size={14} /> Back</span>
             </Button>
-            <Button onClick={handleNext}>Next &rarr;</Button>
+            <Button onClick={handleNext}>
+              <span className="flex items-center gap-1">Next <ChevronRight size={14} /></span>
+            </Button>
           </div>
         </Card>
       </div>

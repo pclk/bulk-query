@@ -24,7 +24,7 @@ const config: Config = {
         mono: ['Monaco', 'Courier New', 'monospace'],
       },
       maxWidth: {
-        app: '1400px',
+        app: '1600px',
       },
       keyframes: {
         slideIn: {

@@ -27,8 +27,30 @@ export function getSizeIndicator(wordCount: number): SizeIndicator {
 }
 
 export function estimateTokens(text: string): number {
-  // Rough estimate: ~0.75 tokens per word for English text
+  // Rough estimate: ~1.33 tokens per word for English text
   return Math.round(countWords(text) * 1.33);
+}
+
+// Anthropic model pricing (per million tokens)
+export interface ModelPricing {
+  inputPerMTok: number;
+  outputPerMTok: number;
+}
+
+export const MODEL_PRICING: Record<string, ModelPricing> = {
+  'claude-sonnet-4-6': { inputPerMTok: 3, outputPerMTok: 15 },
+  'claude-opus-4-6': { inputPerMTok: 15, outputPerMTok: 75 },
+  'claude-haiku-4-5': { inputPerMTok: 0.80, outputPerMTok: 4 },
+};
+
+export function estimateCost(inputTokens: number, outputTokens: number, model: string): number {
+  const pricing = MODEL_PRICING[model] || MODEL_PRICING['claude-sonnet-4-6'];
+  return (inputTokens / 1_000_000) * pricing.inputPerMTok + (outputTokens / 1_000_000) * pricing.outputPerMTok;
+}
+
+export function formatCost(cost: number): string {
+  if (cost < 0.01) return '<$0.01';
+  return `$${cost.toFixed(2)}`;
 }
 
 export interface ChunkStats {
@@ -37,13 +59,12 @@ export interface ChunkStats {
   avgWords: number;
   minWords: number;
   maxWords: number;
-  estimatedInputTokens: number;
-  estimatedOutputTokens: number;
+  estimatedTokens: number;
 }
 
 export function computeChunkStats(chunks: { wordCount: number; text: string }[]): ChunkStats {
   if (chunks.length === 0) {
-    return { count: 0, totalWords: 0, avgWords: 0, minWords: 0, maxWords: 0, estimatedInputTokens: 0, estimatedOutputTokens: 0 };
+    return { count: 0, totalWords: 0, avgWords: 0, minWords: 0, maxWords: 0, estimatedTokens: 0 };
   }
 
   const wordCounts = chunks.map((c) => c.wordCount);
@@ -56,8 +77,7 @@ export function computeChunkStats(chunks: { wordCount: number; text: string }[])
     avgWords: Math.round(totalWords / chunks.length),
     minWords: Math.min(...wordCounts),
     maxWords: Math.max(...wordCounts),
-    estimatedInputTokens,
-    // Rough estimate: output tokens ~= input tokens for most tasks
-    estimatedOutputTokens: estimatedInputTokens,
+    // Combined input + output estimate (output assumed ≈ input for most tasks)
+    estimatedTokens: estimatedInputTokens * 2,
   };
 }

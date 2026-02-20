@@ -1,9 +1,10 @@
 'use client';
 
+import { Check } from 'lucide-react';
+
 interface Step {
   num: number;
   label: string;
-  sublabel?: string;
 }
 
 interface StepIndicatorProps {
@@ -12,13 +13,14 @@ interface StepIndicatorProps {
   onStepClick: (step: number) => void;
   subStep?: '3a' | '3b' | null;
   onSubStepClick?: (sub: '3a' | '3b') => void;
+  hideStep4?: boolean;
 }
 
-const STEPS: Step[] = [
-  { num: 1, label: 'Input Text' },
-  { num: 2, label: 'Chunk & Adjust' },
-  { num: 3, label: 'Task / Copy' },
-  { num: 4, label: 'Process & Export' },
+const ALL_STEPS: Step[] = [
+  { num: 1, label: 'Input' },
+  { num: 2, label: 'Chunk' },
+  { num: 3, label: 'Task' },
+  { num: 4, label: 'Process' },
 ];
 
 export default function StepIndicator({
@@ -27,70 +29,70 @@ export default function StepIndicator({
   onStepClick,
   subStep,
   onSubStepClick,
+  hideStep4,
 }: StepIndicatorProps) {
-  return (
-    <div className="mb-12">
-      <div className="flex justify-center gap-4 p-6 bg-surface rounded-xl">
-        {STEPS.map((step) => {
-          const isActive = currentStep === step.num;
-          const isCompleted = completedSteps.includes(step.num);
-          const isOptional = step.num >= 3;
+  const steps = hideStep4 ? ALL_STEPS.filter((s) => s.num !== 4) : ALL_STEPS;
 
-          return (
-            <div
-              key={step.num}
-              className={`flex items-center gap-2 px-6 py-3 rounded-lg cursor-pointer transition-all duration-300 ${
+  return (
+    <div className="flex items-center gap-1">
+      {steps.map((step, i) => {
+        const isActive = currentStep === step.num;
+        const isCompleted = completedSteps.includes(step.num);
+
+        return (
+          <div key={step.num} className="flex items-center">
+            <button
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer ${
                 isActive
-                  ? 'bg-gradient-to-br from-accent to-accent-purple scale-105'
+                  ? 'bg-accent/20 text-accent border border-accent/40'
                   : isCompleted
-                    ? 'bg-[#2a4a2a]'
-                    : 'bg-surface-light'
+                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                    : 'bg-surface-light/50 text-gray-500 border border-transparent hover:text-gray-300'
               }`}
               onClick={() => onStepClick(step.num)}
             >
-              <div
-                className={`w-6 h-6 rounded-full flex items-center justify-center text-sm font-semibold ${
-                  isActive ? 'bg-white/20' : 'bg-white/10'
-                }`}
-              >
-                {step.num}
-              </div>
-              <div>
-                <div className="text-sm font-medium">{step.label}</div>
-                {isOptional && (
-                  <div className="text-[10px] text-gray-400 opacity-70">optional</div>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+              {isCompleted && !isActive ? (
+                <Check size={12} strokeWidth={3} />
+              ) : (
+                <span className="w-4 h-4 rounded-full bg-white/10 flex items-center justify-center text-[10px]">
+                  {step.num}
+                </span>
+              )}
+              {step.label}
+            </button>
 
-      {/* Sub-step tabs for step 3 */}
-      {currentStep === 3 && onSubStepClick && (
-        <div className="flex justify-center gap-2 mt-3">
-          <button
-            className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${
-              subStep === '3a'
-                ? 'bg-accent/20 text-accent border border-accent/40'
-                : 'bg-surface-light text-gray-400 border border-transparent hover:text-gray-200'
-            }`}
-            onClick={() => onSubStepClick('3a')}
-          >
-            3a. Define Task
-          </button>
-          <button
-            className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${
-              subStep === '3b'
-                ? 'bg-accent/20 text-accent border border-accent/40'
-                : 'bg-surface-light text-gray-400 border border-transparent hover:text-gray-200'
-            }`}
-            onClick={() => onSubStepClick('3b')}
-          >
-            3b. Sequential Copy
-          </button>
-        </div>
-      )}
+            {/* Sub-step toggle inline for step 3 */}
+            {step.num === 3 && isActive && onSubStepClick && (
+              <div className="flex items-center gap-0.5 ml-1">
+                <button
+                  className={`px-2 py-1 rounded text-[11px] font-medium transition-all ${
+                    subStep === '3a'
+                      ? 'bg-accent/15 text-accent'
+                      : 'text-gray-500 hover:text-gray-300'
+                  }`}
+                  onClick={() => onSubStepClick('3a')}
+                >
+                  Task
+                </button>
+                <button
+                  className={`px-2 py-1 rounded text-[11px] font-medium transition-all ${
+                    subStep === '3b'
+                      ? 'bg-accent/15 text-accent'
+                      : 'text-gray-500 hover:text-gray-300'
+                  }`}
+                  onClick={() => onSubStepClick('3b')}
+                >
+                  Copy
+                </button>
+              </div>
+            )}
+
+            {i < steps.length - 1 && (
+              <div className={`w-4 h-px mx-1 ${isCompleted ? 'bg-emerald-500/40' : 'bg-surface-lighter'}`} />
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Copy, RefreshCw, Loader2, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Copy, RefreshCw, Loader2, CheckCircle, XCircle, Clock, ChevronLeft } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import { getStoredApiKey, getStoredModel } from './ApiKeySettings';
@@ -154,6 +154,19 @@ export default function Step4Processing({
 
   return (
     <div>
+      {/* Top navigation */}
+      <div className="flex justify-between items-center mb-4">
+        <Button variant="secondary" size="small" onClick={onBack} disabled={isProcessing}>
+          <span className="flex items-center gap-1">
+            <ChevronLeft size={14} />
+            Back
+          </span>
+        </Button>
+        <span className="text-sm text-gray-400">
+          {completedCount} / {chunks.length} processed
+        </span>
+      </div>
+
       <Card>
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-semibold text-gray-100">Processing Results</h2>

@@ -309,6 +309,9 @@ export default function BulkQueryApp() {
     setSubStep('3a');
   };
 
+  // Determine whether to hide step 4 (when sequential copy mode is active)
+  const isSequentialCopyMode = currentStep === 3 && subStep === '3b';
+
   if (status === 'loading') {
     return (
       <div className="max-w-app mx-auto p-8 min-h-screen flex items-center justify-center">
@@ -320,7 +323,7 @@ export default function BulkQueryApp() {
   // Show login form when not authenticated
   if (!session) {
     return (
-      <div className="max-w-app mx-auto p-8 min-h-screen">
+      <div className="max-w-[600px] mx-auto p-8 min-h-screen">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold bg-gradient-to-br from-accent to-accent-purple bg-clip-text text-transparent">
             bulk-query
@@ -334,25 +337,33 @@ export default function BulkQueryApp() {
   }
 
   return (
-    <div className="max-w-app mx-auto p-8 min-h-screen">
-      <div className="flex justify-between items-center mb-4">
-        <h1 className="text-3xl font-bold bg-gradient-to-br from-accent to-accent-purple bg-clip-text text-transparent">
+    <div className="max-w-app mx-auto px-6 py-4 min-h-screen">
+      {/* Compact Header: title + steps + controls */}
+      <div className="flex items-center justify-between mb-4 gap-4">
+        <h1 className="text-xl font-bold bg-gradient-to-br from-accent to-accent-purple bg-clip-text text-transparent shrink-0">
           bulk-query
         </h1>
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 text-sm text-gray-400">
-            <User size={14} />
+
+        <StepIndicator
+          currentStep={currentStep}
+          completedSteps={completedSteps}
+          onStepClick={goToStep}
+          subStep={currentStep === 3 ? subStep : null}
+          onSubStepClick={setSubStep}
+          hideStep4={isSequentialCopyMode}
+        />
+
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-xs text-gray-500 hidden lg:inline">
+            <User size={12} className="inline mr-1" />
             {session.user?.email}
-          </div>
+          </span>
           <Button
             variant="secondary"
             size="small"
             onClick={() => signOut()}
           >
-            <span className="flex items-center gap-1">
-              <LogOut size={14} />
-              Sign Out
-            </span>
+            <LogOut size={14} />
           </Button>
           <Button
             variant="secondary"
@@ -360,20 +371,17 @@ export default function BulkQueryApp() {
             onClick={() => setShowSettings(true)}
             className={!hasApiKey ? 'border border-amber-500/50' : ''}
           >
-            <span className="flex items-center gap-2">
-              <Settings size={16} />
-              {hasApiKey ? 'API Settings' : 'Set API Key'}
-            </span>
+            <Settings size={14} />
           </Button>
         </div>
       </div>
 
       {/* API key warning banner */}
       {!hasApiKey && (
-        <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-center justify-between">
+        <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-center justify-between">
           <div className="text-sm text-amber-200">
-            <strong>No API key configured.</strong>{' '}
-            An Anthropic API key is required for chunking. You can use Sequential Copy (step 3b) to process chunks manually with your preferred chatbot.
+            <strong>No API key.</strong>{' '}
+            Required for chunking. Use Sequential Copy (step 3b) to process manually.
           </div>
           <Button size="small" onClick={() => setShowSettings(true)}>
             Configure
@@ -381,102 +389,99 @@ export default function BulkQueryApp() {
         </div>
       )}
 
-      {/* Project History + New Project */}
-      <div className="mb-6">
-        <ProjectHistory
-          onLoad={loadProject}
-          showToast={showToast}
-          currentProjectId={currentProjectId}
-          onRefreshRef={projectRefreshRef}
-        />
-        {/* Current project indicator + New Project */}
-        <div className="mt-3 flex items-center justify-between">
-          <div className="text-sm text-gray-400">
+      {/* Main layout: Sidebar + Content */}
+      <div className="grid grid-cols-[240px_1fr] gap-5">
+        {/* Left Sidebar: Projects */}
+        <aside className="sticky top-4 self-start space-y-3">
+          <ProjectHistory
+            onLoad={loadProject}
+            showToast={showToast}
+            currentProjectId={currentProjectId}
+            onRefreshRef={projectRefreshRef}
+          />
+
+          {/* Current project indicator + New Project */}
+          <div className="text-xs text-gray-500 px-1">
             {currentProjectId ? (
-              <>
-                Working on: <span className="text-gray-200 font-medium">{projectName}</span>
-                <span className="text-gray-600 ml-2">(auto-saving)</span>
-              </>
+              <span className="truncate block">
+                <span className="text-gray-400">{projectName}</span>
+                <span className="text-gray-600 ml-1">(auto-saving)</span>
+              </span>
             ) : (
-              <span className="text-gray-500">No project — will auto-create on next step</span>
+              'Auto-creates project on next step'
             )}
           </div>
-          <Button variant="secondary" size="small" onClick={startNewProject}>
-            <span className="flex items-center gap-1">
+          <Button variant="secondary" size="small" onClick={startNewProject} className="w-full">
+            <span className="flex items-center justify-center gap-1">
               <Plus size={14} />
               New Project
             </span>
           </Button>
-        </div>
+        </aside>
+
+        {/* Main Content */}
+        <main className="min-w-0">
+          {/* Step 1: Input Text */}
+          {currentStep === 1 && (
+            <Step2TextInput
+              rawText={rawText}
+              setRawText={setRawText}
+              onNext={handleNextFromStep1}
+              showToast={showToast}
+              onAutoSave={handleAutoSave}
+            />
+          )}
+
+          {/* Step 2: Chunk & Adjust */}
+          {currentStep === 2 && (
+            <Step3Chunking
+              rawText={rawText}
+              taskPrompt={taskPrompt}
+              chunks={chunks}
+              setChunks={setChunks}
+              isChunking={isChunking}
+              setIsChunking={setIsChunking}
+              onNext={nextStep}
+              onBack={prevStep}
+              showToast={showToast}
+            />
+          )}
+
+          {/* Step 3: Task / Sequential Copy */}
+          {currentStep === 3 && subStep === '3a' && (
+            <Step1TaskDefinition
+              taskPrompt={taskPrompt}
+              setTaskPrompt={setTaskPrompt}
+              savedTemplates={savedTemplates}
+              setSavedTemplates={setSavedTemplates}
+              showToast={showToast}
+              onProceedToProcess={goToProcessing}
+            />
+          )}
+
+          {currentStep === 3 && subStep === '3b' && (
+            <Step3SequentialCopy
+              chunks={chunks}
+              onBack={prevStep}
+              showToast={showToast}
+            />
+          )}
+
+          {/* Step 4: Process & Export */}
+          {currentStep === 4 && (
+            <Step4Processing
+              chunks={chunks}
+              taskPrompt={taskPrompt}
+              processingMode={processingMode}
+              setProcessingMode={setProcessingMode}
+              results={results}
+              setResults={setResults}
+              onBack={prevStep}
+              showToast={showToast}
+            />
+          )}
+        </main>
       </div>
-
-      <StepIndicator
-        currentStep={currentStep}
-        completedSteps={completedSteps}
-        onStepClick={goToStep}
-        subStep={currentStep === 3 ? subStep : null}
-        onSubStepClick={setSubStep}
-      />
-
-      {/* Step 1: Input Text (was Step 2) */}
-      {currentStep === 1 && (
-        <Step2TextInput
-          rawText={rawText}
-          setRawText={setRawText}
-          onNext={handleNextFromStep1}
-          showToast={showToast}
-          onAutoSave={handleAutoSave}
-        />
-      )}
-
-      {/* Step 2: Chunk & Adjust (was Step 3) */}
-      {currentStep === 2 && (
-        <Step3Chunking
-          rawText={rawText}
-          taskPrompt={taskPrompt}
-          chunks={chunks}
-          setChunks={setChunks}
-          isChunking={isChunking}
-          setIsChunking={setIsChunking}
-          onNext={nextStep}
-          onBack={prevStep}
-          showToast={showToast}
-        />
-      )}
-
-      {/* Step 3: Task / Sequential Copy */}
-      {currentStep === 3 && subStep === '3a' && (
-        <Step1TaskDefinition
-          taskPrompt={taskPrompt}
-          setTaskPrompt={setTaskPrompt}
-          savedTemplates={savedTemplates}
-          setSavedTemplates={setSavedTemplates}
-          showToast={showToast}
-          onProceedToProcess={goToProcessing}
-        />
-      )}
-
-      {currentStep === 3 && subStep === '3b' && (
-        <Step3SequentialCopy
-          chunks={chunks}
-          onBack={prevStep}
-          showToast={showToast}
-        />
-      )}
-
-      {/* Step 4: Process & Export (optional) */}
-      {currentStep === 4 && (
-        <Step4Processing
-          chunks={chunks}
-          taskPrompt={taskPrompt}
-          processingMode={processingMode}
-          setProcessingMode={setProcessingMode}
-          results={results}
-          setResults={setResults}
-          onBack={prevStep}
-          showToast={showToast}
-        />
-      )}
 
       {showSettings && (
         <ApiKeySettings

@@ -99,7 +99,7 @@ describe('computeChunkStats', () => {
     expect(stats.avgWords).toBe(200);
     expect(stats.minWords).toBe(100);
     expect(stats.maxWords).toBe(300);
-    expect(stats.estimatedInputTokens).toBeGreaterThan(0);
+    expect(stats.estimatedTokens).toBeGreaterThan(0);
   });
 
   it('returns zeroes for empty array', () => {
