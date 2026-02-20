@@ -11,7 +11,7 @@ interface Step2Props {
   rawText: string;
   setRawText: (text: string) => void;
   onNext: () => void;
-  showToast: (message: string) => void;
+  showToast: (message: string, error?: unknown) => void;
   onAutoSave?: (text: string) => void;
   saveStatus?: 'idle' | 'saving' | 'saved';
 }

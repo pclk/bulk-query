@@ -20,7 +20,7 @@ interface Step1Props {
   setTaskPrompt: (prompt: string) => void;
   savedTemplates: Template[];
   setSavedTemplates: React.Dispatch<React.SetStateAction<Template[]>>;
-  showToast: (message: string) => void;
+  showToast: (message: string, error?: unknown) => void;
   onProceedToProcess?: () => void;
 }
 

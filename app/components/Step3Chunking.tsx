@@ -17,7 +17,7 @@ interface Step3Props {
   setIsChunking: (value: boolean) => void;
   onNext: () => void;
   onBack: () => void;
-  showToast: (message: string) => void;
+  showToast: (message: string, error?: unknown) => void;
 }
 
 function SizeIcon({ size }: { size: ReturnType<typeof getSizeIndicator> }) {
@@ -70,7 +70,7 @@ export default function Step3Chunking({
       setChunks(data.chunks);
       showToast(`Created ${data.chunks.length} chunks`);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Chunking failed');
+      showToast(err instanceof Error ? err.message : 'Chunking failed', err);
     } finally {
       setIsChunking(false);
     }

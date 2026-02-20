@@ -24,7 +24,7 @@ interface ProjectFull extends ProjectSummary {
 interface ProjectHistoryProps {
   onLoad: (project: ProjectFull) => void;
   onSave: (name: string) => Promise<void>;
-  showToast: (message: string) => void;
+  showToast: (message: string, error?: unknown) => void;
   canSave: boolean;
 }
 
@@ -60,8 +60,8 @@ export default function ProjectHistory({ onLoad, onSave, showToast, canSave }: P
       const data = await res.json();
       onLoad(data.project);
       showToast(`Loaded: ${data.project.name}`);
-    } catch {
-      showToast('Failed to load project');
+    } catch (err) {
+      showToast('Failed to load project', err);
     }
   };
 
@@ -71,8 +71,8 @@ export default function ProjectHistory({ onLoad, onSave, showToast, canSave }: P
       if (!res.ok) throw new Error('Failed to delete');
       setProjects((prev) => prev.filter((p) => p.id !== id));
       showToast(`Deleted: ${name}`);
-    } catch {
-      showToast('Failed to delete project');
+    } catch (err) {
+      showToast('Failed to delete project', err);
     }
   };
 

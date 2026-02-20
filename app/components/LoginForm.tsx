@@ -6,7 +6,7 @@ import { LogIn, UserPlus } from 'lucide-react';
 import Button from '@/components/ui/Button';
 
 interface LoginFormProps {
-  showToast: (message: string) => void;
+  showToast: (message: string, error?: unknown) => void;
 }
 
 export default function LoginForm({ showToast }: LoginFormProps) {
@@ -36,8 +36,8 @@ export default function LoginForm({ showToast }: LoginFormProps) {
         }
 
         showToast('Account created! Signing in...');
-      } catch {
-        showToast('Registration failed');
+      } catch (err) {
+        showToast('Registration failed', err);
         setLoading(false);
         return;
       }

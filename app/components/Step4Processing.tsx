@@ -15,7 +15,7 @@ interface Step4Props {
   results: ProcessingResult[];
   setResults: React.Dispatch<React.SetStateAction<ProcessingResult[]>>;
   onBack: () => void;
-  showToast: (message: string) => void;
+  showToast: (message: string, error?: unknown) => void;
 }
 
 export default function Step4Processing({
@@ -78,11 +78,11 @@ export default function Step4Processing({
           setResults((prev) =>
             prev.map((r, idx) => (idx === i ? { ...r, status: 'complete', output } : r))
           );
-        } catch {
+        } catch (err) {
           setResults((prev) =>
             prev.map((r, idx) => (idx === i ? { ...r, status: 'error' } : r))
           );
-          showToast(`Error processing chunk ${i + 1}`);
+          showToast(`Error processing chunk ${i + 1}`, err);
         }
       }
     } else {
@@ -96,10 +96,11 @@ export default function Step4Processing({
           setResults((prev) =>
             prev.map((r, idx) => (idx === i ? { ...r, status: 'complete', output } : r))
           );
-        } catch {
+        } catch (err) {
           setResults((prev) =>
             prev.map((r, idx) => (idx === i ? { ...r, status: 'error' } : r))
           );
+          showToast(`Error processing chunk ${i + 1}`, err);
         }
       });
 

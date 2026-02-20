@@ -20,7 +20,7 @@ import type { Chunk } from '@/lib/schemas/task';
 interface Step3SequentialCopyProps {
   chunks: Chunk[];
   onBack: () => void;
-  showToast: (message: string) => void;
+  showToast: (message: string, error?: unknown) => void;
 }
 
 export default function Step3SequentialCopy({

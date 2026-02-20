@@ -71,7 +71,7 @@ export async function saveSettingToServer(
 
 interface ApiKeySettingsProps {
   onClose: () => void;
-  showToast: (message: string) => void;
+  showToast: (message: string, error?: unknown) => void;
 }
 
 export default function ApiKeySettings({ onClose, showToast }: ApiKeySettingsProps) {

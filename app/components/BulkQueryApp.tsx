@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { Settings, LogOut, User } from 'lucide-react';
 import StepIndicator from './StepIndicator';
-import ToastContainer from './ToastContainer';
+import ToastContainer, { type Toast } from './ToastContainer';
 import ApiKeySettings, {
   getStoredApiKey,
   loadSettingsFromServer,
@@ -20,11 +20,6 @@ import Step4Processing from './Step4Processing';
 import Button from '@/components/ui/Button';
 import { generateId } from '@/lib/utils';
 import type { Template, Chunk, ProcessingResult } from '@/lib/schemas/task';
-
-interface Toast {
-  id: string;
-  message: string;
-}
 
 export default function BulkQueryApp() {
   const { data: session, status } = useSession();
@@ -55,12 +50,17 @@ export default function BulkQueryApp() {
   const templatesSaveRef = useRef(false);
   const draftSaveRef = useRef<NodeJS.Timeout | null>(null);
 
-  const showToast = (message: string) => {
+  const showToast = (message: string, error?: unknown) => {
     const id = generateId();
-    setToasts((prev) => [...prev, { id, message }]);
+    const debug = error
+      ? error instanceof Error
+        ? `${error.name}: ${error.message}`
+        : String(error)
+      : undefined;
+    setToasts((prev) => [...prev, { id, message, debug }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 3000);
+    }, 5000);
   };
 
   const refreshApiKeyStatus = () => {
@@ -185,7 +185,7 @@ export default function BulkQueryApp() {
 
       showToast(`Project "${name}" saved!`);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Save failed');
+      showToast(err instanceof Error ? err.message : 'Save failed', err);
     }
   };
 
