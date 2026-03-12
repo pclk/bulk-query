@@ -2,7 +2,7 @@
 const nextConfig = {
   experimental: {
     // Prevent webpack from bundling these — they must run as native Node modules
-    serverComponentsExternalPackages: ['ws', 'bcryptjs'],
+    serverComponentsExternalPackages: ['bcryptjs'],
   },
   async headers() {
     return [

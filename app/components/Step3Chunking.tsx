@@ -42,7 +42,8 @@ export default function Step3Chunking({
   showToast,
 }: Step3Props) {
   const [selectedChunks, setSelectedChunks] = useState<string[]>([]);
-  const [editingCtx, setEditingCtx] = useState<string | null>(null);
+  const [editingCtxId, setEditingCtxId] = useState<string | null>(null);
+  const [editingCtxValue, setEditingCtxValue] = useState('');
 
   const performChunking = async () => {
     setIsChunking(true);
@@ -173,8 +174,14 @@ export default function Step3Chunking({
 
   const updateChunkCtx = (chunkId: string, newCtx: string) => {
     setChunks((prev) => prev.map((c) => (c.id === chunkId ? { ...c, ctx: newCtx || null } : c)));
-    setEditingCtx(null);
+    setEditingCtxId(null);
+    setEditingCtxValue('');
     showToast('Context updated');
+  };
+
+  const startEditingCtx = (chunk: Chunk) => {
+    setEditingCtxId(chunk.id);
+    setEditingCtxValue(chunk.ctx ?? '');
   };
 
   const handleNext = () => {
@@ -325,18 +332,29 @@ export default function Step3Chunking({
                 {chunk.ctx && (
                   <div className="p-3 bg-[#1a2a3a] rounded-md mb-2 text-sm italic text-[#a0c0e0]">
                     Context:{' '}
-                    {editingCtx === chunk.id ? (
+                    {editingCtxId === chunk.id ? (
                       <input
                         type="text"
-                        value={chunk.ctx}
-                        onChange={(e) => updateChunkCtx(chunk.id, e.target.value)}
-                        onBlur={() => setEditingCtx(null)}
+                        value={editingCtxValue}
+                        onChange={(e) => setEditingCtxValue(e.target.value)}
+                        onBlur={() => updateChunkCtx(chunk.id, editingCtxValue)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            e.currentTarget.blur();
+                          }
+                          if (e.key === 'Escape') {
+                            e.preventDefault();
+                            setEditingCtxId(null);
+                            setEditingCtxValue('');
+                          }
+                        }}
                         autoFocus
                         className="bg-[#2a3a4a] border border-[#3a4a5a] text-gray-200 px-2 py-1 rounded w-full mt-1 focus:outline-none"
                       />
                     ) : (
                       <span
-                        onClick={() => setEditingCtx(chunk.id)}
+                        onClick={() => startEditingCtx(chunk)}
                         className="cursor-pointer"
                       >
                         {chunk.ctx}

@@ -48,3 +48,20 @@ export const processingResultSchema = z.object({
 });
 
 export type ProcessingResult = z.infer<typeof processingResultSchema>;
+
+export interface ProjectSummary {
+  id: string;
+  name: string;
+  taskPrompt: string;
+  processingMode: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProjectRecord extends ProjectSummary {
+  rawText: string;
+  chunks: Chunk[];
+  results: ProcessingResult[] | null;
+}
+
+export type AuthMode = 'account' | 'guest';

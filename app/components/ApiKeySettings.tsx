@@ -96,10 +96,6 @@ export default function ApiKeySettings({ onClose, showToast }: ApiKeySettingsPro
     showToast('API key removed');
   };
 
-  const maskedKey = apiKey
-    ? `sk-ant-...${apiKey.slice(-8)}`
-    : '';
-
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-start justify-center pt-24">
       <div className="bg-surface-dark border border-surface-light rounded-xl w-full max-w-lg p-6 shadow-2xl">
@@ -160,13 +156,6 @@ export default function ApiKeySettings({ onClose, showToast }: ApiKeySettingsPro
           <div className={`mb-4 text-sm flex items-center gap-1 ${verified ? 'text-emerald-500' : 'text-red-500'}`}>
             {verified ? <CheckCircle size={14} /> : <XCircle size={14} />}
             {verified ? 'Key verified' : 'Key invalid or expired'}
-          </div>
-        )}
-
-        {/* Stored key indicator */}
-        {!showKey && getStoredApiKey() && !apiKey && (
-          <div className="mb-4 text-xs text-gray-500">
-            Stored: {maskedKey}
           </div>
         )}
 

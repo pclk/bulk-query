@@ -29,9 +29,6 @@ prisma/*.db-journal
 
 # Testing
 /coverage
-/test-results/
-/playwright-report/
-/blob-report/
 
 # Editor directories and files
 .vscode/*
@@ -51,3 +48,4 @@ next-env.d.ts
 
 # Vercel
 .vercel
+.env*.local

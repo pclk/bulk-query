@@ -1,92 +1,52 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { FolderOpen, Trash2, Clock, Save } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
-import type { Chunk, ProcessingResult } from '@/lib/schemas/task';
-
-interface ProjectSummary {
-  id: string;
-  name: string;
-  taskPrompt: string;
-  processingMode: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface ProjectFull extends ProjectSummary {
-  rawText: string;
-  chunks: Chunk[];
-  results: ProcessingResult[] | null;
-}
+import type { AuthMode, ProjectSummary } from '@/lib/schemas/task';
 
 interface ProjectHistoryProps {
-  onLoad: (project: ProjectFull) => void;
-  onSave: (name: string) => Promise<void>;
+  authMode: AuthMode;
+  projects: ProjectSummary[];
+  loading: boolean;
+  onLoadProject: (id: string) => Promise<void>;
+  onSaveProject: (name: string) => Promise<boolean>;
+  onDeleteProject: (id: string, name: string) => Promise<void>;
   showToast: (message: string) => void;
   canSave: boolean;
 }
 
-export default function ProjectHistory({ onLoad, onSave, showToast, canSave }: ProjectHistoryProps) {
-  const [projects, setProjects] = useState<ProjectSummary[]>([]);
-  const [loading, setLoading] = useState(true);
+export default function ProjectHistory({
+  authMode,
+  projects,
+  loading,
+  onLoadProject,
+  onSaveProject,
+  onDeleteProject,
+  showToast,
+  canSave,
+}: ProjectHistoryProps) {
   const [saving, setSaving] = useState(false);
   const [showNameInput, setShowNameInput] = useState(false);
   const [projectName, setProjectName] = useState('');
-
-  const fetchProjects = async () => {
-    try {
-      const res = await fetch('/api/projects');
-      if (res.ok) {
-        const data = await res.json();
-        setProjects(data.projects);
-      }
-    } catch {
-      // Silently fail — user might not be authenticated
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchProjects();
-  }, []);
-
-  const loadProject = async (id: string) => {
-    try {
-      const res = await fetch(`/api/projects/${id}`);
-      if (!res.ok) throw new Error('Failed to load project');
-      const data = await res.json();
-      onLoad(data.project);
-      showToast(`Loaded: ${data.project.name}`);
-    } catch {
-      showToast('Failed to load project');
-    }
-  };
-
-  const deleteProject = async (id: string, name: string) => {
-    try {
-      const res = await fetch(`/api/projects/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed to delete');
-      setProjects((prev) => prev.filter((p) => p.id !== id));
-      showToast(`Deleted: ${name}`);
-    } catch {
-      showToast('Failed to delete project');
-    }
-  };
 
   const handleSave = async () => {
     if (!projectName.trim()) {
       showToast('Enter a project name');
       return;
     }
+
     setSaving(true);
-    await onSave(projectName.trim());
+    const saved = await onSaveProject(projectName.trim());
+    setSaving(false);
+
+    if (!saved) {
+      return;
+    }
+
     setProjectName('');
     setShowNameInput(false);
-    setSaving(false);
-    fetchProjects();
   };
 
   return (
@@ -108,6 +68,12 @@ export default function ProjectHistory({ onLoad, onSave, showToast, canSave }: P
           </Button>
         )}
       </div>
+
+      <p className="mb-4 text-xs text-gray-500">
+        {authMode === 'guest'
+          ? 'Guest projects are saved locally in this browser.'
+          : 'Signed-in projects are saved to your account.'}
+      </p>
 
       {showNameInput && (
         <div className="mb-4 flex gap-2">
@@ -153,14 +119,14 @@ export default function ProjectHistory({ onLoad, onSave, showToast, canSave }: P
               <Button
                 variant="secondary"
                 size="small"
-                onClick={() => loadProject(project.id)}
+                onClick={() => onLoadProject(project.id)}
               >
                 Load
               </Button>
               <Button
                 variant="danger"
                 size="small"
-                onClick={() => deleteProject(project.id, project.name)}
+                onClick={() => onDeleteProject(project.id, project.name)}
               >
                 <Trash2 size={14} />
               </Button>

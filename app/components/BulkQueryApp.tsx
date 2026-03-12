@@ -13,8 +13,25 @@ import Step2TextInput from './Step2TextInput';
 import Step3Chunking from './Step3Chunking';
 import Step4Processing from './Step4Processing';
 import Button from '@/components/ui/Button';
+import {
+  deleteGuestProject,
+  endGuestSession,
+  GUEST_USER_LABEL,
+  getGuestProjects,
+  isGuestSessionActive,
+  startGuestSession,
+  toProjectSummaries,
+  upsertGuestProject,
+} from '@/lib/guest';
 import { generateId } from '@/lib/utils';
-import type { Template, Chunk, ProcessingResult } from '@/lib/schemas/task';
+import type {
+  AuthMode,
+  Template,
+  Chunk,
+  ProcessingResult,
+  ProjectRecord,
+  ProjectSummary,
+} from '@/lib/schemas/task';
 
 interface Toast {
   id: string;
@@ -23,11 +40,15 @@ interface Toast {
 
 export default function BulkQueryApp() {
   const { data: session, status } = useSession();
+  const [isGuest, setIsGuest] = useState(false);
+  const [authReady, setAuthReady] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [showSettings, setShowSettings] = useState(false);
   const [hasApiKey, setHasApiKey] = useState(false);
+  const [projects, setProjects] = useState<ProjectSummary[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(true);
 
   // Step 1: Task Definition
   const [taskPrompt, setTaskPrompt] = useState('');
@@ -44,6 +65,8 @@ export default function BulkQueryApp() {
   const [processingMode, setProcessingMode] = useState('sequential');
   const [results, setResults] = useState<ProcessingResult[]>([]);
 
+  const authMode: AuthMode | null = session ? 'account' : isGuest ? 'guest' : null;
+
   const showToast = (message: string) => {
     const id = generateId();
     setToasts((prev) => [...prev, { id, message }]);
@@ -54,6 +77,31 @@ export default function BulkQueryApp() {
 
   const refreshApiKeyStatus = () => {
     setHasApiKey(!!getStoredApiKey());
+  };
+
+  const refreshProjects = async (mode: AuthMode) => {
+    setProjectsLoading(true);
+
+    if (mode === 'guest') {
+      setProjects(toProjectSummaries(getGuestProjects()));
+      setProjectsLoading(false);
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/projects');
+      if (!res.ok) {
+        throw new Error('Failed to load projects');
+      }
+
+      const data = await res.json();
+      setProjects(data.projects);
+    } catch {
+      showToast('Failed to load projects');
+      setProjects([]);
+    } finally {
+      setProjectsLoading(false);
+    }
   };
 
   const goToStep = (step: number) => {
@@ -110,16 +158,61 @@ export default function BulkQueryApp() {
       }
     }
     refreshApiKeyStatus();
+    setIsGuest(isGuestSessionActive());
+    setAuthReady(true);
   }, []);
+
+  useEffect(() => {
+    if (!authReady || status === 'loading') {
+      return;
+    }
+
+    if (!authMode) {
+      setProjects([]);
+      setProjectsLoading(false);
+      return;
+    }
+
+    refreshProjects(authMode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authMode, authReady, status]);
 
   // Save templates to localStorage
   useEffect(() => {
     if (savedTemplates.length > 0) {
       localStorage.setItem('bulk-query-templates', JSON.stringify(savedTemplates));
+      return;
     }
+
+    localStorage.removeItem('bulk-query-templates');
   }, [savedTemplates]);
 
-  const saveProject = async (name: string) => {
+  const saveProject = async (name: string): Promise<boolean> => {
+    if (!authMode) {
+      showToast('Sign in or continue as guest to save projects');
+      return false;
+    }
+
+    if (authMode === 'guest') {
+      const timestamp = new Date().toISOString();
+      const project: ProjectRecord = {
+        id: generateId(),
+        name,
+        taskPrompt,
+        rawText,
+        chunks,
+        results: results.length > 0 ? results : null,
+        processingMode,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      };
+
+      const nextProjects = upsertGuestProject(project);
+      setProjects(toProjectSummaries(nextProjects));
+      showToast(`Project "${name}" saved locally`);
+      return true;
+    }
+
     try {
       const res = await fetch('/api/projects', {
         method: 'POST',
@@ -139,9 +232,23 @@ export default function BulkQueryApp() {
         throw new Error(data.error || 'Save failed');
       }
 
+      const data = await res.json();
+      setProjects((prev) => [
+        {
+          id: data.project.id,
+          name: data.project.name,
+          taskPrompt: data.project.taskPrompt,
+          processingMode: data.project.processingMode,
+          createdAt: data.project.createdAt,
+          updatedAt: data.project.updatedAt,
+        },
+        ...prev.filter((project) => project.id !== data.project.id),
+      ]);
       showToast(`Project "${name}" saved!`);
+      return true;
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Save failed');
+      return false;
     }
   };
 
@@ -173,7 +280,83 @@ export default function BulkQueryApp() {
     }
   };
 
-  if (status === 'loading') {
+  const handleGuestLogin = () => {
+    startGuestSession();
+    setIsGuest(true);
+    setProjects(toProjectSummaries(getGuestProjects()));
+    showToast('Guest mode enabled');
+  };
+
+  const handleSignOut = async () => {
+    if (authMode === 'guest') {
+      endGuestSession();
+      setIsGuest(false);
+      setProjects([]);
+      showToast('Guest session ended');
+      return;
+    }
+
+    await signOut({ redirect: false });
+  };
+
+  const handleLoadProject = async (id: string) => {
+    if (!authMode) {
+      showToast('Sign in or continue as guest first');
+      return;
+    }
+
+    if (authMode === 'guest') {
+      const project = getGuestProjects().find((entry) => entry.id === id);
+      if (!project) {
+        showToast('Failed to load project');
+        return;
+      }
+
+      loadProject(project);
+      showToast(`Loaded: ${project.name}`);
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/projects/${id}`);
+      if (!res.ok) {
+        throw new Error('Failed to load project');
+      }
+
+      const data = await res.json();
+      loadProject(data.project);
+      showToast(`Loaded: ${data.project.name}`);
+    } catch {
+      showToast('Failed to load project');
+    }
+  };
+
+  const handleDeleteProject = async (id: string, name: string) => {
+    if (!authMode) {
+      return;
+    }
+
+    if (authMode === 'guest') {
+      const nextProjects = deleteGuestProject(id);
+      setProjects(toProjectSummaries(nextProjects));
+      showToast(`Deleted: ${name}`);
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/projects/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        throw new Error('Failed to delete');
+      }
+
+      setProjects((prev) => prev.filter((project) => project.id !== id));
+      showToast(`Deleted: ${name}`);
+    } catch {
+      showToast('Failed to delete project');
+    }
+  };
+
+  if (status === 'loading' || !authReady) {
     return (
       <div className="max-w-app mx-auto p-8 min-h-screen flex items-center justify-center">
         <div className="text-gray-400">Loading...</div>
@@ -182,7 +365,7 @@ export default function BulkQueryApp() {
   }
 
   // Show login form when not authenticated
-  if (!session) {
+  if (!authMode) {
     return (
       <div className="max-w-app mx-auto p-8 min-h-screen">
         <div className="text-center mb-8">
@@ -191,7 +374,7 @@ export default function BulkQueryApp() {
           </h1>
           <p className="text-gray-400 mt-2">Process large text inputs through AI operations</p>
         </div>
-        <LoginForm showToast={showToast} />
+        <LoginForm showToast={showToast} onGuestLogin={handleGuestLogin} />
         <ToastContainer toasts={toasts} />
       </div>
     );
@@ -208,16 +391,16 @@ export default function BulkQueryApp() {
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 text-sm text-gray-400">
             <User size={14} />
-            {session.user?.email}
+            {authMode === 'guest' ? GUEST_USER_LABEL : session?.user?.email}
           </div>
           <Button
             variant="secondary"
             size="small"
-            onClick={() => signOut()}
+            onClick={handleSignOut}
           >
             <span className="flex items-center gap-1">
               <LogOut size={14} />
-              Sign Out
+              {authMode === 'guest' ? 'Exit Guest' : 'Sign Out'}
             </span>
           </Button>
           <Button
@@ -250,8 +433,12 @@ export default function BulkQueryApp() {
       {/* Project History */}
       <div className="mb-6">
         <ProjectHistory
-          onLoad={loadProject}
-          onSave={saveProject}
+          authMode={authMode}
+          projects={projects}
+          loading={projectsLoading}
+          onLoadProject={handleLoadProject}
+          onSaveProject={saveProject}
+          onDeleteProject={handleDeleteProject}
           showToast={showToast}
           canSave={canSaveProject}
         />

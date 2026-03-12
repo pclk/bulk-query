@@ -2,14 +2,16 @@
 
 import { useState } from 'react';
 import { signIn } from 'next-auth/react';
-import { LogIn, UserPlus } from 'lucide-react';
+import { LogIn, User, UserPlus } from 'lucide-react';
 import Button from '@/components/ui/Button';
+import { endGuestSession } from '@/lib/guest';
 
 interface LoginFormProps {
   showToast: (message: string) => void;
+  onGuestLogin: () => void;
 }
 
-export default function LoginForm({ showToast }: LoginFormProps) {
+export default function LoginForm({ showToast, onGuestLogin }: LoginFormProps) {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -52,6 +54,7 @@ export default function LoginForm({ showToast }: LoginFormProps) {
     if (result?.error) {
       showToast(mode === 'login' ? 'Invalid email or password' : 'Sign-in failed after registration');
     } else {
+      endGuestSession();
       showToast('Signed in!');
     }
 
@@ -106,7 +109,24 @@ export default function LoginForm({ showToast }: LoginFormProps) {
                   : 'Create Account'}
             </span>
           </Button>
+
+          <Button
+            type="button"
+            variant="secondary"
+            className="w-full justify-center"
+            onClick={onGuestLogin}
+            disabled={loading}
+          >
+            <span className="flex items-center justify-center gap-2">
+              <User size={16} />
+              Continue as Guest
+            </span>
+          </Button>
         </form>
+
+        <p className="mt-4 text-center text-xs text-gray-500">
+          Guest mode stores projects in this browser only.
+        </p>
 
         <div className="mt-6 text-center text-sm text-gray-500">
           {mode === 'login' ? (
