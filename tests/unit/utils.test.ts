@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { generateId, countWords, getWordCountStatus, getSizeIndicator, estimateTokens, computeChunkStats } from '@/lib/utils';
+import {
+  generateId,
+  countWords,
+  getWordCountStatus,
+  getSizeIndicator,
+  estimateTokens,
+  computeChunkStats,
+  computeCompletedStepCount,
+} from '@/lib/utils';
 
 describe('generateId', () => {
   it('returns a non-empty string', () => {
@@ -41,20 +49,16 @@ describe('getWordCountStatus', () => {
     expect(getWordCountStatus(500).status).toBe('low');
   });
 
-  it('returns good for counts between 1000 and 6000', () => {
+  it('returns good for counts at or above 1000', () => {
     expect(getWordCountStatus(3000).status).toBe('good');
-  });
-
-  it('returns high for counts above 6000', () => {
-    expect(getWordCountStatus(7000).status).toBe('high');
   });
 
   it('returns good at exactly 1000', () => {
     expect(getWordCountStatus(1000).status).toBe('good');
   });
 
-  it('returns good at exactly 6000', () => {
-    expect(getWordCountStatus(6000).status).toBe('good');
+  it('keeps large inputs in the good range', () => {
+    expect(getWordCountStatus(7000).status).toBe('good');
   });
 });
 
@@ -107,5 +111,25 @@ describe('computeChunkStats', () => {
     expect(stats.count).toBe(0);
     expect(stats.totalWords).toBe(0);
     expect(stats.avgWords).toBe(0);
+  });
+});
+
+describe('computeCompletedStepCount', () => {
+  it('counts completed steps using the same workflow rules', () => {
+    expect(computeCompletedStepCount({
+      rawText: 'some text',
+      chunks: [{ id: '1' }],
+      taskPrompt: 'Summarize this',
+      results: [{ chunkId: '1', output: 'done' }],
+    })).toBe(4);
+  });
+
+  it('ignores empty or missing values', () => {
+    expect(computeCompletedStepCount({
+      rawText: '   ',
+      chunks: [],
+      taskPrompt: '',
+      results: null,
+    })).toBe(0);
   });
 });

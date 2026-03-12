@@ -4,6 +4,7 @@ import {
   taskPromptSchema,
   rawTextSchema,
   chunkRequestSchema,
+  chunkingOptionsSchema,
   processRequestSchema,
 } from '@/lib/schemas/task';
 
@@ -89,6 +90,42 @@ describe('chunkRequestSchema', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it('accepts a chunk request without a task prompt', () => {
+    const result = chunkRequestSchema.safeParse({
+      text: 'Some text',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts chunk count settings', () => {
+    const result = chunkRequestSchema.safeParse({
+      text: 'Some text',
+      chunking: {
+        strategy: 'count',
+        targetChunkCount: 5,
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+});
+
+describe('chunkingOptionsSchema', () => {
+  it('rejects count mode without a target count', () => {
+    const result = chunkingOptionsSchema.safeParse({
+      strategy: 'count',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects invalid word ranges', () => {
+    const result = chunkingOptionsSchema.safeParse({
+      strategy: 'range',
+      minChunkWords: 1200,
+      maxChunkWords: 1000,
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe('processRequestSchema', () => {
@@ -103,6 +140,7 @@ describe('processRequestSchema', () => {
         ctx: null,
         text: 'Some chunk text',
         wordCount: 3,
+        parseMode: 'anchors',
       },
       taskPrompt: 'Summarize',
     });

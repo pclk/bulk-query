@@ -11,15 +11,21 @@ export function countWords(text: string): number {
 }
 
 interface WordCountStatus {
-  status: 'low' | 'high' | 'good';
+  status: 'low' | 'good';
   color: string;
   message: string;
 }
 
 export function getWordCountStatus(count: number): WordCountStatus {
-  if (count < 1000) return { status: 'low', color: 'text-red-500', message: 'Below recommended range' };
-  if (count > 6000) return { status: 'high', color: 'text-amber-500', message: 'Above recommended range' };
-  return { status: 'good', color: 'text-emerald-500', message: 'Ideal range' };
+  if (count < 1000) {
+    return {
+      status: 'low',
+      color: 'text-amber-400',
+      message: 'Under 1,000 words. A direct AI prompt may work better for text this short.',
+    };
+  }
+
+  return { status: 'good', color: 'text-emerald-500', message: 'Recommended minimum reached' };
 }
 
 export type SizeIndicator = 'small' | 'large' | 'good';
@@ -33,6 +39,40 @@ export function getSizeIndicator(wordCount: number): SizeIndicator {
 export function estimateTokens(text: string): number {
   // Rough estimate: ~0.75 tokens per word for English text
   return Math.round(countWords(text) * 1.33);
+}
+
+interface CompletionState {
+  rawText?: string | null;
+  chunks?: unknown;
+  taskPrompt?: string | null;
+  results?: unknown;
+}
+
+export function computeCompletedStepCount({
+  rawText,
+  chunks,
+  taskPrompt,
+  results,
+}: CompletionState): number {
+  let completed = 0;
+
+  if ((rawText ?? '').trim().length > 0) {
+    completed += 1;
+  }
+
+  if (Array.isArray(chunks) && chunks.length > 0) {
+    completed += 1;
+  }
+
+  if ((taskPrompt ?? '').trim().length > 0) {
+    completed += 1;
+  }
+
+  if (Array.isArray(results) && results.length > 0) {
+    completed += 1;
+  }
+
+  return completed;
 }
 
 export interface ChunkStats {

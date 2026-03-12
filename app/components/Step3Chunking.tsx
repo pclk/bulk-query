@@ -1,65 +1,147 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Scissors, Merge, CircleDot, BarChart3 } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Copy, Info, Play, RotateCcw, Scissors } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
-import { generateId, countWords, getSizeIndicator, computeChunkStats } from '@/lib/utils';
+import Textarea from '@/components/ui/Textarea';
+import ChunkReviewPanel from './ChunkReviewPanel';
 import { getStoredApiKey, getStoredModel } from './ApiKeySettings';
-import type { Chunk } from '@/lib/schemas/task';
+import {
+  buildPromptChunkingInput,
+  paragraphChunking,
+  parseChunkManifestResponse,
+} from '@/lib/chunking';
+import { countWords } from '@/lib/utils';
+import { resolveChunkingOptions, type Chunk } from '@/lib/schemas/task';
+
+type ChunkingSubStep = '2a' | '2b' | '2c';
 
 interface Step3Props {
   rawText: string;
-  taskPrompt: string;
   chunks: Chunk[];
-  setChunks: React.Dispatch<React.SetStateAction<Chunk[]>>;
+  setChunks: (chunks: Chunk[]) => void;
   isChunking: boolean;
   setIsChunking: (value: boolean) => void;
+  chunkingSubStep: ChunkingSubStep;
+  setChunkingSubStep: (value: ChunkingSubStep) => void;
   onNext: () => void;
   onBack: () => void;
   showToast: (message: string) => void;
 }
 
-function SizeIcon({ size }: { size: ReturnType<typeof getSizeIndicator> }) {
-  const colors = {
-    small: 'text-red-500',
-    large: 'text-amber-500',
-    good: 'text-emerald-500',
-  };
-
-  return <CircleDot size={20} className={colors[size]} />;
-}
-
 export default function Step3Chunking({
   rawText,
-  taskPrompt,
   chunks,
   setChunks,
   isChunking,
   setIsChunking,
+  chunkingSubStep,
+  setChunkingSubStep,
   onNext,
   onBack,
   showToast,
 }: Step3Props) {
-  const [selectedChunks, setSelectedChunks] = useState<string[]>([]);
-  const [editingCtxId, setEditingCtxId] = useState<string | null>(null);
-  const [editingCtxValue, setEditingCtxValue] = useState('');
+  const [chunkingStrategy, setChunkingStrategy] = useState<'count' | 'range'>('range');
+  const [targetChunkCount, setTargetChunkCount] = useState(() =>
+    Math.max(2, Math.ceil(countWords(rawText) / 1200))
+  );
+  const [minChunkWords, setMinChunkWords] = useState(750);
+  const [maxChunkWords, setMaxChunkWords] = useState(1500);
+  const [promptResponse, setPromptResponse] = useState('');
+  const [promptError, setPromptError] = useState<string | null>(null);
+  const lastParagraphKeyRef = useRef<string | null>(null);
 
-  const performChunking = async () => {
-    setIsChunking(true);
-    showToast('Analyzing text and creating chunks...');
+  useEffect(() => {
+    setTargetChunkCount(Math.max(2, Math.ceil(countWords(rawText) / 1200)));
+  }, [rawText]);
+
+  const chunkingOptions = useMemo(() => (
+    chunkingStrategy === 'count'
+      ? {
+          strategy: 'count' as const,
+          targetChunkCount,
+        }
+      : {
+          strategy: 'range' as const,
+          minChunkWords,
+          maxChunkWords,
+        }
+  ), [chunkingStrategy, maxChunkWords, minChunkWords, targetChunkCount]);
+
+  const promptText = useMemo(
+    () => buildPromptChunkingInput(rawText, chunkingOptions),
+    [chunkingOptions, rawText]
+  );
+
+  const autoParagraphChunks = useMemo(
+    () => paragraphChunking(rawText, resolveChunkingOptions(chunkingOptions)),
+    [chunkingOptions, rawText]
+  );
+
+  useEffect(() => {
+    if (!rawText.trim()) {
+      return;
+    }
+
+    const shouldAutoApply = chunkingSubStep === '2c' || chunks.length === 0;
+    if (!shouldAutoApply) {
+      return;
+    }
+
+    const nextKey = JSON.stringify({
+      rawText,
+      chunkingOptions,
+      paragraphChunks: autoParagraphChunks.map((chunk) => ({
+        title: chunk.title,
+        start: chunk.start,
+        end: chunk.end,
+        lines: chunk.lines,
+        text: chunk.text,
+      })),
+    });
+
+    if (nextKey === lastParagraphKeyRef.current) {
+      return;
+    }
+
+    lastParagraphKeyRef.current = nextKey;
+    setChunks(autoParagraphChunks);
+  }, [autoParagraphChunks, chunkingOptions, chunkingSubStep, chunks.length, rawText, setChunks]);
+
+  const performApiChunking = async () => {
+    if (chunkingStrategy === 'count' && targetChunkCount < 2) {
+      showToast('Choose at least 2 chunks');
+      return;
+    }
+
+    if (chunkingStrategy === 'range' && minChunkWords >= maxChunkWords) {
+      showToast('Maximum chunk words must be greater than the minimum');
+      return;
+    }
 
     const apiKey = getStoredApiKey();
-    const model = getStoredModel();
+    if (!apiKey) {
+      showToast('API chunking requires an Anthropic API key');
+      return;
+    }
+
+    setIsChunking(true);
+    setPromptError(null);
+    showToast('Running API chunking...');
 
     try {
       const res = await fetch('/api/chunk', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(apiKey ? { 'x-api-key': apiKey, 'x-model': model } : {}),
+          'x-api-key': apiKey,
+          'x-model': getStoredModel(),
         },
-        body: JSON.stringify({ text: rawText, taskPrompt }),
+        body: JSON.stringify({
+          text: rawText,
+          chunking: chunkingOptions,
+        }),
       });
 
       const data = await res.json();
@@ -69,7 +151,8 @@ export default function Step3Chunking({
       }
 
       setChunks(data.chunks);
-      showToast(`Created ${data.chunks.length} chunks`);
+      setChunkingSubStep('2a');
+      showToast(`Created ${data.chunks.length} API chunks`);
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Chunking failed');
     } finally {
@@ -77,315 +160,226 @@ export default function Step3Chunking({
     }
   };
 
-  useEffect(() => {
-    if (chunks.length === 0 && !isChunking) {
-      performChunking();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const mergeChunks = () => {
-    if (selectedChunks.length !== 2) {
-      showToast('Please select exactly 2 adjacent chunks to merge');
+  const applyPromptChunks = () => {
+    if (!promptResponse.trim()) {
+      showToast('Paste your chatbot output first');
       return;
     }
 
-    const indices = selectedChunks
-      .map((id) => chunks.findIndex((c) => c.id === id))
-      .sort((a, b) => a - b);
-
-    if (indices[1] - indices[0] !== 1) {
-      showToast('Can only merge adjacent chunks');
-      return;
+    try {
+      const nextChunks = parseChunkManifestResponse(rawText, promptResponse, 'prompt');
+      setChunks(nextChunks);
+      setPromptError(null);
+      setChunkingSubStep('2b');
+      showToast(`Applied ${nextChunks.length} prompt chunks`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to parse chatbot output';
+      setPromptError(message);
+      showToast(message);
     }
-
-    const chunk1 = chunks[indices[0]];
-    const chunk2 = chunks[indices[1]];
-
-    const merged: Chunk = {
-      id: generateId(),
-      title: chunk1.title,
-      start: chunk1.start,
-      end: chunk2.end,
-      lines: [chunk1.lines[0], chunk2.lines[1]],
-      ctx: chunk1.ctx,
-      text: chunk1.text + '\n\n' + chunk2.text,
-      wordCount: chunk1.wordCount + chunk2.wordCount,
-    };
-
-    const newChunks = [...chunks];
-    newChunks.splice(indices[0], 2, merged);
-    setChunks(newChunks);
-    setSelectedChunks([]);
-    showToast('Chunks merged');
   };
 
-  const splitChunk = (chunkId: string) => {
-    const index = chunks.findIndex((c) => c.id === chunkId);
-    const chunk = chunks[index];
-
-    if (chunk.wordCount < 100) {
-      showToast('Chunk too small to split');
-      return;
-    }
-
-    const words = chunk.text.split(/\s+/);
-    const midPoint = Math.floor(words.length / 2);
-    const text1 = words.slice(0, midPoint).join(' ');
-    const text2 = words.slice(midPoint).join(' ');
-
-    const chunk1: Chunk = {
-      id: generateId(),
-      title: chunk.title + ' (Part 1)',
-      start: chunk.start,
-      end: text1.split(/\s+/).slice(-7).join(' '),
-      lines: [chunk.lines[0], chunk.lines[0] + Math.floor((chunk.lines[1] - chunk.lines[0]) / 2)],
-      ctx: chunk.ctx,
-      text: text1,
-      wordCount: countWords(text1),
-    };
-
-    const chunk2: Chunk = {
-      id: generateId(),
-      title: chunk.title + ' (Part 2)',
-      start: text2.split(/\s+/).slice(0, 7).join(' '),
-      end: chunk.end,
-      lines: [chunk1.lines[1] + 1, chunk.lines[1]],
-      ctx: 'Continuation of ' + chunk.title,
-      text: text2,
-      wordCount: countWords(text2),
-    };
-
-    const newChunks = [...chunks];
-    newChunks.splice(index, 1, chunk1, chunk2);
-    setChunks(newChunks);
-    showToast('Chunk split');
-  };
-
-  const toggleChunkSelection = (chunkId: string) => {
-    setSelectedChunks((prev) =>
-      prev.includes(chunkId) ? prev.filter((id) => id !== chunkId) : [...prev, chunkId]
-    );
-  };
-
-  const updateChunkTitle = (chunkId: string, newTitle: string) => {
-    setChunks((prev) => prev.map((c) => (c.id === chunkId ? { ...c, title: newTitle } : c)));
-  };
-
-  const updateChunkCtx = (chunkId: string, newCtx: string) => {
-    setChunks((prev) => prev.map((c) => (c.id === chunkId ? { ...c, ctx: newCtx || null } : c)));
-    setEditingCtxId(null);
-    setEditingCtxValue('');
-    showToast('Context updated');
-  };
-
-  const startEditingCtx = (chunk: Chunk) => {
-    setEditingCtxId(chunk.id);
-    setEditingCtxValue(chunk.ctx ?? '');
+  const copyPromptText = async () => {
+    await navigator.clipboard.writeText(promptText);
+    showToast('Prompt chunking input copied');
   };
 
   const handleNext = () => {
     if (chunks.length === 0) {
-      showToast('No chunks available');
+      showToast('Run or apply a chunking method first');
       return;
     }
+
     onNext();
   };
+
+  const subStepLabel = {
+    '2a': 'API chunking',
+    '2b': 'Prompt chunking',
+    '2c': 'Paragraph chunking',
+  }[chunkingSubStep];
+  const activeChunkLabel = chunks[0]?.method
+    ? {
+        api: 'API chunking',
+        prompt: 'Prompt chunking',
+        paragraph: 'Paragraph chunking',
+      }[chunks[0].method]
+    : null;
 
   if (isChunking) {
     return (
       <div>
-        <Card className="text-center py-12">
-          <div className="text-5xl mb-4">
+        <Card className="py-12 text-center">
+          <div className="mb-4 text-5xl">
             <Scissors size={48} className="mx-auto text-accent" />
           </div>
           <h2 className="text-xl font-semibold">Analyzing text...</h2>
-          <p className="text-gray-400 mt-2">Creating semantic chunks</p>
+          <p className="mt-2 text-gray-400">Creating semantic chunks with your selected settings</p>
         </Card>
       </div>
     );
   }
 
-  const stats = computeChunkStats(chunks);
-
   return (
     <div>
-      {/* Summary Statistics */}
-      {chunks.length > 0 && (
-        <Card className="mb-6">
-          <div className="flex items-center gap-2 mb-4">
-            <BarChart3 size={18} className="text-accent" />
-            <h3 className="text-base font-semibold">Chunk Statistics</h3>
+      <Card className="mb-6">
+        <div className="mb-4 flex items-center gap-2">
+          <Scissors size={18} className="text-accent" />
+          <h2 className="text-xl font-semibold text-gray-100">Chunking</h2>
+        </div>
+        <p className="mb-6 text-gray-400">
+          Configure your chunk sizing once, then choose how to generate chunks. <strong>{subStepLabel}</strong> is currently active.
+        </p>
+        {activeChunkLabel && activeChunkLabel !== subStepLabel && (
+          <div className="mb-6 rounded-lg border border-surface-lighter bg-surface-light p-4 text-sm text-gray-300">
+            Current reviewed chunks are from <strong>{activeChunkLabel}</strong>. Switch to that sub-step or generate/apply new chunks here to replace them.
           </div>
-          <div className="grid grid-cols-3 gap-4 sm:grid-cols-6">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-gray-100">{stats.count}</div>
-              <div className="text-xs text-gray-400">Chunks</div>
+        )}
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="flex flex-col gap-2 text-sm text-gray-300">
+            Chunking mode
+            <select
+              value={chunkingStrategy}
+              onChange={(e) => setChunkingStrategy(e.target.value as 'count' | 'range')}
+              className="rounded-lg border border-surface-lighter bg-surface-light p-3 text-gray-200 focus:outline-none"
+            >
+              <option value="range">Set by chunk length range</option>
+              <option value="count">Set by amount of chunks</option>
+            </select>
+          </label>
+
+          {chunkingStrategy === 'count' ? (
+            <label className="flex flex-col gap-2 text-sm text-gray-300">
+              Target chunk count
+              <input
+                type="number"
+                min={2}
+                max={100}
+                value={targetChunkCount}
+                onChange={(e) => setTargetChunkCount(Math.max(2, Number(e.target.value) || 2))}
+                className="rounded-lg border border-surface-lighter bg-surface-light p-3 text-gray-200 focus:outline-none"
+              />
+            </label>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="flex flex-col gap-2 text-sm text-gray-300">
+                Minimum words
+                <input
+                  type="number"
+                  min={100}
+                  max={10000}
+                  value={minChunkWords}
+                  onChange={(e) => setMinChunkWords(Math.max(100, Number(e.target.value) || 100))}
+                  className="rounded-lg border border-surface-lighter bg-surface-light p-3 text-gray-200 focus:outline-none"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm text-gray-300">
+                Maximum words
+                <input
+                  type="number"
+                  min={200}
+                  max={10000}
+                  value={maxChunkWords}
+                  onChange={(e) => setMaxChunkWords(Math.max(200, Number(e.target.value) || 200))}
+                  className="rounded-lg border border-surface-lighter bg-surface-light p-3 text-gray-200 focus:outline-none"
+                />
+              </label>
             </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-gray-100">{stats.totalWords.toLocaleString()}</div>
-              <div className="text-xs text-gray-400">Total Words</div>
+          )}
+        </div>
+
+        <div className="mt-6 flex justify-between">
+          <Button variant="secondary" onClick={onBack}>
+            &larr; Back
+          </Button>
+          <div className="flex items-center gap-3">
+            {chunkingSubStep === '2a' && (
+              <Button onClick={performApiChunking}>
+                <span className="flex items-center gap-2">
+                  {chunks[0]?.method === 'api' ? <RotateCcw size={16} /> : <Play size={16} />}
+                  {chunks[0]?.method === 'api' ? 'Run API Again' : 'Run API Chunking'}
+                </span>
+              </Button>
+            )}
+            <Button onClick={handleNext}>
+              Continue &rarr;
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      {chunkingSubStep === '2b' && (
+        <Card className="mb-6">
+          <div className="mb-4 flex items-center gap-2">
+            <Copy size={18} className="text-accent" />
+            <h3 className="text-lg font-semibold text-gray-100">2b. Prompt Chunking</h3>
+          </div>
+          <div className="mb-4 rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-100">
+            This is auto-generated because it costs no API calls. Copy the prompt below into your preferred chatbot, then paste the chatbot output back here.
+          </div>
+
+          <div className="mb-6">
+            <div className="mb-2 flex items-center justify-between">
+              <label className="text-sm font-medium text-gray-300">Copyable chunking input</label>
+              <Button variant="secondary" size="small" onClick={copyPromptText}>
+                <span className="flex items-center gap-2">
+                  <Copy size={14} />
+                  Copy
+                </span>
+              </Button>
             </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-gray-100">{stats.avgWords.toLocaleString()}</div>
-              <div className="text-xs text-gray-400">Avg Words</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-gray-100">{stats.minWords.toLocaleString()}</div>
-              <div className="text-xs text-gray-400">Min Words</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-gray-100">{stats.maxWords.toLocaleString()}</div>
-              <div className="text-xs text-gray-400">Max Words</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-gray-100">~{(stats.estimatedInputTokens + stats.estimatedOutputTokens).toLocaleString()}</div>
-              <div className="text-xs text-gray-400">Est. Tokens (I/O)</div>
+            <Textarea value={promptText} readOnly className="min-h-[260px]" />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-gray-300">
+              Paste chatbot output
+            </label>
+            <Textarea
+              value={promptResponse}
+              onChange={(e) => setPromptResponse(e.target.value)}
+              placeholder="Paste the JSON chunk manifest returned by your chatbot here."
+              className="min-h-[220px]"
+            />
+            {promptError && (
+              <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
+                {promptError}
+              </div>
+            )}
+            <div className="mt-4 flex items-center gap-3">
+              <Button onClick={applyPromptChunks}>Apply Chatbot Output</Button>
+              {chunks[0]?.method === 'prompt' && (
+                <span className="text-sm text-emerald-400">Prompt chunks are currently active.</span>
+              )}
             </div>
           </div>
         </Card>
       )}
 
-      <div className="grid grid-cols-[300px_1fr] gap-6">
-        {/* Chunk Sidebar */}
-        <div>
-          <Card>
-            <h3 className="text-base font-semibold mb-4">Chunks ({chunks.length})</h3>
-            <div className="flex gap-2 mb-4">
-              <Button
-                variant="secondary"
-                size="small"
-                onClick={mergeChunks}
-                disabled={selectedChunks.length !== 2}
-              >
-                <span className="flex items-center gap-1">
-                  <Merge size={14} />
-                  Merge
-                </span>
-              </Button>
-            </div>
-            <div className="flex flex-col gap-2 max-h-[600px] overflow-y-auto">
-              {chunks.map((chunk) => {
-                const isSelected = selectedChunks.includes(chunk.id);
-                const indicator = getSizeIndicator(chunk.wordCount);
-
-                return (
-                  <div
-                    key={chunk.id}
-                    className={`p-3 rounded-md cursor-pointer border-2 transition-colors ${
-                      isSelected
-                        ? 'bg-[#3a3a5a] border-accent'
-                        : 'bg-surface-light border-transparent'
-                    }`}
-                    onClick={() => toggleChunkSelection(chunk.id)}
-                  >
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-sm font-semibold">{chunk.title}</span>
-                      <SizeIcon size={indicator} />
-                    </div>
-                    <div className="text-xs text-gray-400">{chunk.wordCount} words</div>
-                    <Button
-                      variant="secondary"
-                      size="small"
-                      className="mt-2 w-full"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        splitChunk(chunk.id);
-                      }}
-                    >
-                      <span className="flex items-center justify-center gap-1">
-                        <Scissors size={14} />
-                        Split
-                      </span>
-                    </Button>
-                  </div>
-                );
-              })}
-            </div>
-          </Card>
-        </div>
-
-        {/* Main Content Area */}
-        <Card>
-          <h2 className="text-xl font-semibold mb-4 text-gray-100">Review & Adjust Chunks</h2>
-          <p className="mb-6 text-gray-400">
-            Click chunks in the sidebar to select them. Select 2 adjacent chunks to merge, or click
-            Split to divide a chunk.
+      {chunkingSubStep === '2c' && (
+        <Card className="mb-6">
+          <div className="mb-4 flex items-center gap-2">
+            <Info size={18} className="text-accent" />
+            <h3 className="text-lg font-semibold text-gray-100">2c. Paragraph Chunking</h3>
+          </div>
+          <div className="mb-4 rounded-lg border border-sky-500/20 bg-sky-500/10 p-4 text-sm text-sky-100">
+            This is the paragraph-based fallback. It auto-runs because it costs no API calls.
+          </div>
+          <p className="text-gray-400">
+            The current chunks were built by grouping paragraphs into the size target above. Changing the sizing settings here will regenerate them automatically.
           </p>
-
-          <div className="mb-6">
-            {chunks.map((chunk, index) => (
-              <div key={chunk.id} className="mb-8">
-                <div className="flex justify-between items-center mb-2 p-3 bg-surface-light rounded-md">
-                  <input
-                    type="text"
-                    value={chunk.title}
-                    onChange={(e) => updateChunkTitle(chunk.id, e.target.value)}
-                    className="bg-transparent border-none text-gray-200 text-base font-semibold flex-1 focus:outline-none"
-                  />
-                  <span className="text-sm text-gray-400 flex items-center gap-2">
-                    {chunk.wordCount} words
-                    <SizeIcon size={getSizeIndicator(chunk.wordCount)} />
-                  </span>
-                </div>
-
-                {chunk.ctx && (
-                  <div className="p-3 bg-[#1a2a3a] rounded-md mb-2 text-sm italic text-[#a0c0e0]">
-                    Context:{' '}
-                    {editingCtxId === chunk.id ? (
-                      <input
-                        type="text"
-                        value={editingCtxValue}
-                        onChange={(e) => setEditingCtxValue(e.target.value)}
-                        onBlur={() => updateChunkCtx(chunk.id, editingCtxValue)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            e.currentTarget.blur();
-                          }
-                          if (e.key === 'Escape') {
-                            e.preventDefault();
-                            setEditingCtxId(null);
-                            setEditingCtxValue('');
-                          }
-                        }}
-                        autoFocus
-                        className="bg-[#2a3a4a] border border-[#3a4a5a] text-gray-200 px-2 py-1 rounded w-full mt-1 focus:outline-none"
-                      />
-                    ) : (
-                      <span
-                        onClick={() => startEditingCtx(chunk)}
-                        className="cursor-pointer"
-                      >
-                        {chunk.ctx}
-                      </span>
-                    )}
-                  </div>
-                )}
-
-                <div className="p-4 bg-surface rounded-md font-mono text-sm leading-relaxed whitespace-pre-wrap max-h-[200px] overflow-y-auto">
-                  {chunk.text}
-                </div>
-
-                {index < chunks.length - 1 && (
-                  <div className="h-0.5 bg-gradient-to-r from-transparent via-accent to-transparent my-6 relative">
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-surface-dark px-3 py-1 text-xs text-accent">
-                      CHUNK BREAK
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-
-          <div className="flex justify-between">
-            <Button variant="secondary" onClick={onBack}>
-              &larr; Back
-            </Button>
-            <Button onClick={handleNext}>Next &rarr;</Button>
-          </div>
         </Card>
-      </div>
+      )}
+
+      {chunks.length > 0 && (
+        <ChunkReviewPanel
+          rawText={rawText}
+          chunks={chunks}
+          setChunks={setChunks}
+          showToast={showToast}
+        />
+      )}
     </div>
   );
 }

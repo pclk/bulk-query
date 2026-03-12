@@ -51,6 +51,7 @@ pnpm test -- --run
 
 - `app/`: pages, API routes, and client components
 - `components/ui/`: shared UI primitives
+- `input_templates/`: filesystem-backed text samples shown as selectable pills above the input textarea
 - `lib/`: auth, Prisma, schemas, and utility helpers
 - `prisma/`: database schema
 - `tests/unit/`: unit coverage for schemas and utilities

@@ -1,7 +1,6 @@
 'use client';
 
-import { useState } from 'react';
-import { FolderOpen, Trash2, Clock, Save } from 'lucide-react';
+import { FolderOpen, Trash2, Clock } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import type { AuthMode, ProjectSummary } from '@/lib/schemas/task';
@@ -10,63 +9,40 @@ interface ProjectHistoryProps {
   authMode: AuthMode;
   projects: ProjectSummary[];
   loading: boolean;
+  activeProjectId: string | null;
   onLoadProject: (id: string) => Promise<void>;
-  onSaveProject: (name: string) => Promise<boolean>;
+  onNewProject: () => Promise<void> | void;
   onDeleteProject: (id: string, name: string) => Promise<void>;
-  showToast: (message: string) => void;
-  canSave: boolean;
+  className?: string;
 }
 
 export default function ProjectHistory({
   authMode,
   projects,
   loading,
+  activeProjectId,
   onLoadProject,
-  onSaveProject,
+  onNewProject,
   onDeleteProject,
-  showToast,
-  canSave,
+  className = '',
 }: ProjectHistoryProps) {
-  const [saving, setSaving] = useState(false);
-  const [showNameInput, setShowNameInput] = useState(false);
-  const [projectName, setProjectName] = useState('');
-
-  const handleSave = async () => {
-    if (!projectName.trim()) {
-      showToast('Enter a project name');
-      return;
-    }
-
-    setSaving(true);
-    const saved = await onSaveProject(projectName.trim());
-    setSaving(false);
-
-    if (!saved) {
-      return;
-    }
-
-    setProjectName('');
-    setShowNameInput(false);
-  };
-
   return (
-    <Card>
+    <Card className={`mb-0 ${className}`}>
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-base font-semibold flex items-center gap-2">
           <FolderOpen size={18} className="text-accent" />
           Projects
         </h3>
-        {canSave && (
-          <Button
-            size="small"
-            onClick={() => setShowNameInput(!showNameInput)}
-          >
-            <span className="flex items-center gap-1">
-              <Save size={14} />
-              Save
-            </span>
-          </Button>
-        )}
+        <Button
+          type="button"
+          size="small"
+          onClick={onNewProject}
+          aria-label="Start a new project"
+          title="Start a new project"
+          className="min-w-0 px-3 text-lg leading-none"
+        >
+          +
+        </Button>
       </div>
 
       <p className="mb-4 text-xs text-gray-500">
@@ -74,23 +50,6 @@ export default function ProjectHistory({
           ? 'Guest projects are saved locally in this browser.'
           : 'Signed-in projects are saved to your account.'}
       </p>
-
-      {showNameInput && (
-        <div className="mb-4 flex gap-2">
-          <input
-            type="text"
-            value={projectName}
-            onChange={(e) => setProjectName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSave()}
-            placeholder="Project name..."
-            className="flex-1 p-2 bg-surface-dark border-2 border-surface-light rounded-lg text-gray-200 text-sm focus:outline-none focus:border-accent"
-            autoFocus
-          />
-          <Button size="small" onClick={handleSave} disabled={saving}>
-            {saving ? '...' : 'Save'}
-          </Button>
-        </div>
-      )}
 
       {loading && (
         <div className="text-sm text-gray-500 text-center py-4">Loading...</div>
@@ -106,13 +65,20 @@ export default function ProjectHistory({
         {projects.map((project) => (
           <div
             key={project.id}
-            className="p-3 bg-surface-light rounded-md flex justify-between items-center group"
+            className={`p-3 rounded-md flex justify-between items-center group border ${
+              project.id === activeProjectId
+                ? 'bg-accent/10 border-accent/40'
+                : 'bg-surface-light border-transparent'
+            }`}
           >
             <div className="flex-1 min-w-0 mr-3">
               <div className="text-sm font-medium truncate">{project.name}</div>
               <div className="text-xs text-gray-500 flex items-center gap-1 mt-1">
                 <Clock size={10} />
                 {new Date(project.updatedAt).toLocaleDateString()}
+              </div>
+              <div className="mt-2 inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-300">
+                completed {project.completedCount}/4
               </div>
             </div>
             <div className="flex gap-1">
