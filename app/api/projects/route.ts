@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
+import { computeCompletedStepCount } from '@/lib/utils';
 
 export async function GET() {
   try {
@@ -19,6 +21,9 @@ export async function GET() {
       select: {
         id: true,
         name: true,
+        rawText: true,
+        chunks: true,
+        results: true,
         taskPrompt: true,
         processingMode: true,
         createdAt: true,
@@ -26,7 +31,25 @@ export async function GET() {
       },
     });
 
-    return NextResponse.json({ projects });
+    return NextResponse.json({
+      projects: projects.map((project) => ({
+        id: project.id,
+        name: project.name,
+        rawText: project.rawText,
+        chunks: project.chunks,
+        results: project.results,
+        taskPrompt: project.taskPrompt,
+        processingMode: project.processingMode,
+        completedCount: computeCompletedStepCount({
+          rawText: project.rawText,
+          chunks: project.chunks,
+          results: project.results,
+          taskPrompt: project.taskPrompt,
+        }),
+        createdAt: project.createdAt,
+        updatedAt: project.updatedAt,
+      })),
+    });
   } catch (error) {
     console.error('[projects] Error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -36,7 +59,7 @@ export async function GET() {
 const createProjectSchema = z.object({
   name: z.string().min(1, 'Project name is required'),
   taskPrompt: z.string().default(''),
-  rawText: z.string().min(1),
+  rawText: z.string().default(''),
   chunks: z.array(z.unknown()),
   results: z.array(z.unknown()).nullable().optional(),
   processingMode: z.string().default('sequential'),
@@ -63,8 +86,10 @@ export async function POST(request: Request) {
     const project = await prisma.project.create({
       data: {
         ...parsed.data,
-        chunks: parsed.data.chunks as [],
-        results: parsed.data.results as [] ?? null,
+        chunks: parsed.data.chunks as Prisma.InputJsonValue,
+        results: parsed.data.results
+          ? (parsed.data.results as Prisma.InputJsonValue)
+          : Prisma.DbNull,
         userId,
       },
     });

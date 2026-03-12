@@ -159,7 +159,7 @@ export default function Step3SequentialCopy({
             <strong>Sequential Copy</strong> lets you walk through your chunks one at a time and
             copy each to your clipboard &mdash; perfect for pasting into your preferred AI chatbot
             (ChatGPT, Gemini, Claude, etc.) without needing an API key for processing.
-            The API key is still required for the initial chunking step.
+            You can create those chunks through API, prompt, or paragraph chunking first.
           </div>
         </div>
       </div>

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
+import { Prisma } from '@prisma/client';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 
@@ -51,15 +52,19 @@ export async function PUT(
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
+    const hasField = (field: string) => Object.prototype.hasOwnProperty.call(body, field);
+
     const project = await prisma.project.update({
       where: { id: params.id },
       data: {
-        name: body.name ?? existing.name,
-        taskPrompt: body.taskPrompt ?? existing.taskPrompt,
-        rawText: body.rawText ?? existing.rawText,
-        chunks: body.chunks ?? existing.chunks,
-        results: body.results ?? existing.results,
-        processingMode: body.processingMode ?? existing.processingMode,
+        name: hasField('name') ? body.name : existing.name,
+        taskPrompt: hasField('taskPrompt') ? body.taskPrompt : existing.taskPrompt,
+        rawText: hasField('rawText') ? body.rawText : existing.rawText,
+        chunks: hasField('chunks') ? body.chunks : existing.chunks,
+        results: hasField('results')
+          ? (body.results ?? Prisma.DbNull)
+          : (existing.results ?? Prisma.DbNull),
+        processingMode: hasField('processingMode') ? body.processingMode : existing.processingMode,
       },
     });
 

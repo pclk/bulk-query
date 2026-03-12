@@ -10,6 +10,8 @@ interface StepIndicatorProps {
   currentStep: number;
   completedSteps: number[];
   onStepClick: (step: number) => void;
+  chunkingSubStep?: '2a' | '2b' | '2c' | null;
+  onChunkingSubStepClick?: (sub: '2a' | '2b' | '2c') => void;
   subStep?: '3a' | '3b' | null;
   onSubStepClick?: (sub: '3a' | '3b') => void;
 }
@@ -25,6 +27,8 @@ export default function StepIndicator({
   currentStep,
   completedSteps,
   onStepClick,
+  chunkingSubStep,
+  onChunkingSubStepClick,
   subStep,
   onSubStepClick,
 }: StepIndicatorProps) {
@@ -35,17 +39,18 @@ export default function StepIndicator({
           const isActive = currentStep === step.num;
           const isCompleted = completedSteps.includes(step.num);
           const isOptional = step.num >= 3;
+          const stateClass = isActive && isCompleted
+            ? 'bg-gradient-to-br from-emerald-600 to-emerald-500 scale-105 ring-1 ring-emerald-300/30'
+            : isActive
+              ? 'bg-gradient-to-br from-accent to-accent-purple scale-105'
+              : isCompleted
+                ? 'bg-[#2a4a2a]'
+                : 'bg-surface-light';
 
           return (
             <div
               key={step.num}
-              className={`flex items-center gap-2 px-6 py-3 rounded-lg cursor-pointer transition-all duration-300 ${
-                isActive
-                  ? 'bg-gradient-to-br from-accent to-accent-purple scale-105'
-                  : isCompleted
-                    ? 'bg-[#2a4a2a]'
-                    : 'bg-surface-light'
-              }`}
+              className={`flex items-center gap-2 px-6 py-3 rounded-lg cursor-pointer transition-all duration-300 ${stateClass}`}
               onClick={() => onStepClick(step.num)}
             >
               <div
@@ -65,6 +70,41 @@ export default function StepIndicator({
           );
         })}
       </div>
+
+      {currentStep === 2 && onChunkingSubStepClick && (
+        <div className="mt-3 flex justify-center gap-2">
+          <button
+            className={`rounded-lg px-5 py-2 text-sm font-medium transition-all ${
+              chunkingSubStep === '2a'
+                ? 'border border-accent/40 bg-accent/20 text-accent'
+                : 'border border-transparent bg-surface-light text-gray-400 hover:text-gray-200'
+            }`}
+            onClick={() => onChunkingSubStepClick('2a')}
+          >
+            2a. API Chunking
+          </button>
+          <button
+            className={`rounded-lg px-5 py-2 text-sm font-medium transition-all ${
+              chunkingSubStep === '2b'
+                ? 'border border-accent/40 bg-accent/20 text-accent'
+                : 'border border-transparent bg-surface-light text-gray-400 hover:text-gray-200'
+            }`}
+            onClick={() => onChunkingSubStepClick('2b')}
+          >
+            2b. Prompt Chunking
+          </button>
+          <button
+            className={`rounded-lg px-5 py-2 text-sm font-medium transition-all ${
+              chunkingSubStep === '2c'
+                ? 'border border-accent/40 bg-accent/20 text-accent'
+                : 'border border-transparent bg-surface-light text-gray-400 hover:text-gray-200'
+            }`}
+            onClick={() => onChunkingSubStepClick('2c')}
+          >
+            2c. Para Chunking
+          </button>
+        </div>
+      )}
 
       {/* Sub-step tabs for step 3 */}
       {currentStep === 3 && onSubStepClick && (

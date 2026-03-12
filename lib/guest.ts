@@ -1,4 +1,5 @@
 import type { ProjectRecord, ProjectSummary } from '@/lib/schemas/task';
+import { computeCompletedStepCount } from '@/lib/utils';
 
 const GUEST_SESSION_KEY = 'bulk-query-guest-session';
 const GUEST_PROJECTS_KEY = 'bulk-query-guest-projects';
@@ -77,5 +78,13 @@ export function deleteGuestProject(id: string): ProjectRecord[] {
 }
 
 export function toProjectSummaries(projects: ProjectRecord[]): ProjectSummary[] {
-  return projects.map(({ rawText: _rawText, chunks: _chunks, results: _results, ...summary }) => summary);
+  return projects.map(({ rawText, chunks, results, ...summary }) => ({
+    ...summary,
+    completedCount: computeCompletedStepCount({
+      rawText,
+      chunks,
+      taskPrompt: summary.taskPrompt,
+      results,
+    }),
+  }));
 }
