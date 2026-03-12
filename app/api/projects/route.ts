@@ -27,14 +27,15 @@ export async function GET() {
     });
 
     return NextResponse.json({ projects });
-  } catch {
+  } catch (error) {
+    console.error('[projects] Error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
 const createProjectSchema = z.object({
   name: z.string().min(1, 'Project name is required'),
-  taskPrompt: z.string().min(1),
+  taskPrompt: z.string().default(''),
   rawText: z.string().min(1),
   chunks: z.array(z.unknown()),
   results: z.array(z.unknown()).nullable().optional(),
@@ -69,7 +70,8 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json({ project }, { status: 201 });
-  } catch {
+  } catch (error) {
+    console.error('[projects] Error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

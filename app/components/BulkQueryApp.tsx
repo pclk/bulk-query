@@ -1,16 +1,21 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { Settings, LogOut, User } from 'lucide-react';
 import StepIndicator from './StepIndicator';
 import ToastContainer from './ToastContainer';
-import ApiKeySettings, { getStoredApiKey } from './ApiKeySettings';
+import ApiKeySettings, {
+  getStoredApiKey,
+  loadSettingsFromServer,
+  saveSettingToServer,
+} from './ApiKeySettings';
 import LoginForm from './LoginForm';
 import ProjectHistory from './ProjectHistory';
 import Step1TaskDefinition from './Step1TaskDefinition';
 import Step2TextInput from './Step2TextInput';
 import Step3Chunking from './Step3Chunking';
+import Step3SequentialCopy from './Step3SequentialCopy';
 import Step4Processing from './Step4Processing';
 import Button from '@/components/ui/Button';
 import {
@@ -44,28 +49,33 @@ export default function BulkQueryApp() {
   const [authReady, setAuthReady] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
+  const [subStep, setSubStep] = useState<'3a' | '3b'>('3a');
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [showSettings, setShowSettings] = useState(false);
   const [hasApiKey, setHasApiKey] = useState(false);
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(true);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
 
-  // Step 1: Task Definition
+  // Step 3a: Task Definition (optional)
   const [taskPrompt, setTaskPrompt] = useState('');
   const [savedTemplates, setSavedTemplates] = useState<Template[]>([]);
 
-  // Step 2: Text Input
+  // Step 1: Text Input
   const [rawText, setRawText] = useState('');
 
-  // Step 3: Chunking
+  // Step 2: Chunking
   const [chunks, setChunks] = useState<Chunk[]>([]);
   const [isChunking, setIsChunking] = useState(false);
 
-  // Step 4: Processing
+  // Step 4: Processing (optional)
   const [processingMode, setProcessingMode] = useState('sequential');
   const [results, setResults] = useState<ProcessingResult[]>([]);
 
   const authMode: AuthMode | null = session ? 'account' : isGuest ? 'guest' : null;
+  // Track whether templates changed by the user (not initial load)
+  const templatesSaveRef = useRef(false);
+  const draftSaveRef = useRef<NodeJS.Timeout | null>(null);
 
   const showToast = (message: string) => {
     const id = generateId();
@@ -125,9 +135,18 @@ export default function BulkQueryApp() {
     setCurrentStep((prev) => Math.max(prev - 1, 1));
   };
 
+  // Navigate directly to step 4 from task definition (3a)
+  const goToProcessing = () => {
+    completeStep(3);
+    setCurrentStep(4);
+  };
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
+      // Don't interfere with sequential copy shortcuts when on step 3b
+      if (currentStep === 3 && subStep === '3b') return;
+
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
         e.preventDefault();
         if (currentStep < 4) {
@@ -145,22 +164,55 @@ export default function BulkQueryApp() {
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentStep]);
+  }, [currentStep, subStep]);
 
-  // Load saved templates from localStorage + check API key
+  // Load local settings that should be available immediately, even before auth resolves.
   useEffect(() => {
-    const saved = localStorage.getItem('bulk-query-templates');
-    if (saved) {
+    const savedTemplatesValue = localStorage.getItem('bulk-query-templates');
+    const savedDraftText = localStorage.getItem('bulk-query-draft-text');
+
+    if (savedTemplatesValue) {
       try {
-        setSavedTemplates(JSON.parse(saved));
-      } catch (e) {
-        console.error('Failed to load templates:', e);
+        setSavedTemplates(JSON.parse(savedTemplatesValue) as Template[]);
+      } catch {
+        localStorage.removeItem('bulk-query-templates');
       }
     }
+
+    if (savedDraftText) {
+      setRawText(savedDraftText);
+    }
+
     refreshApiKeyStatus();
     setIsGuest(isGuestSessionActive());
     setAuthReady(true);
   }, []);
+
+  // Load account-backed settings after a real session is available.
+  useEffect(() => {
+    if (!session) {
+      setSettingsLoaded(false);
+      return;
+    }
+
+    const loadSettings = async () => {
+      const settings = await loadSettingsFromServer();
+      if (settings) {
+        if (Array.isArray(settings.templates)) {
+          setSavedTemplates(settings.templates as Template[]);
+        }
+        if (typeof settings.draftText === 'string') {
+          setRawText(settings.draftText);
+        }
+      }
+
+      refreshApiKeyStatus();
+      setSettingsLoaded(true);
+      templatesSaveRef.current = false;
+    };
+
+    loadSettings();
+  }, [session]);
 
   useEffect(() => {
     if (!authReady || status === 'loading') {
@@ -177,15 +229,52 @@ export default function BulkQueryApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authMode, authReady, status]);
 
-  // Save templates to localStorage
+  // Persist templates locally for guests and as a client-side cache for signed-in users.
   useEffect(() => {
     if (savedTemplates.length > 0) {
       localStorage.setItem('bulk-query-templates', JSON.stringify(savedTemplates));
+    } else {
+      localStorage.removeItem('bulk-query-templates');
+    }
+
+    if (authMode !== 'account' || !settingsLoaded) {
       return;
     }
 
-    localStorage.removeItem('bulk-query-templates');
-  }, [savedTemplates]);
+    if (!templatesSaveRef.current) {
+      templatesSaveRef.current = true;
+      return;
+    }
+
+    saveSettingToServer('templates', savedTemplates);
+  }, [savedTemplates, authMode, settingsLoaded]);
+
+  const handleAutoSave = useCallback(
+    (text: string) => {
+      localStorage.setItem('bulk-query-draft-text', text);
+
+      if (authMode !== 'account' || !session) {
+        return;
+      }
+
+      if (draftSaveRef.current) {
+        clearTimeout(draftSaveRef.current);
+      }
+
+      draftSaveRef.current = setTimeout(() => {
+        saveSettingToServer('draftText', text);
+      }, 3000);
+    },
+    [authMode, session]
+  );
+
+  useEffect(() => {
+    return () => {
+      if (draftSaveRef.current) {
+        clearTimeout(draftSaveRef.current);
+      }
+    };
+  }, []);
 
   const saveProject = async (name: string): Promise<boolean> => {
     if (!authMode) {
@@ -272,6 +361,7 @@ export default function BulkQueryApp() {
     } else if (project.chunks.length > 0) {
       setCompletedSteps([1, 2]);
       setCurrentStep(3);
+      setSubStep('3a');
     } else if (project.rawText) {
       setCompletedSteps([1]);
       setCurrentStep(2);
@@ -380,7 +470,7 @@ export default function BulkQueryApp() {
     );
   }
 
-  const canSaveProject = taskPrompt.trim().length > 0 && rawText.trim().length > 0;
+  const canSaveProject = rawText.trim().length > 0;
 
   return (
     <div className="max-w-app mx-auto p-8 min-h-screen">
@@ -422,7 +512,7 @@ export default function BulkQueryApp() {
         <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-center justify-between">
           <div className="text-sm text-amber-200">
             <strong>No API key configured.</strong>{' '}
-            Add your Anthropic API key to enable AI-powered chunking and processing.
+            An Anthropic API key is required for chunking. You can use Sequential Copy (step 3b) to process chunks manually with your preferred chatbot.
           </div>
           <Button size="small" onClick={() => setShowSettings(true)}>
             Configure
@@ -448,30 +538,23 @@ export default function BulkQueryApp() {
         currentStep={currentStep}
         completedSteps={completedSteps}
         onStepClick={goToStep}
+        subStep={currentStep === 3 ? subStep : null}
+        onSubStepClick={setSubStep}
       />
 
+      {/* Step 1: Input Text (was Step 2) */}
       {currentStep === 1 && (
-        <Step1TaskDefinition
-          taskPrompt={taskPrompt}
-          setTaskPrompt={setTaskPrompt}
-          savedTemplates={savedTemplates}
-          setSavedTemplates={setSavedTemplates}
-          onNext={nextStep}
-          showToast={showToast}
-        />
-      )}
-
-      {currentStep === 2 && (
         <Step2TextInput
           rawText={rawText}
           setRawText={setRawText}
           onNext={nextStep}
-          onBack={prevStep}
           showToast={showToast}
+          onAutoSave={handleAutoSave}
         />
       )}
 
-      {currentStep === 3 && (
+      {/* Step 2: Chunk & Adjust (was Step 3) */}
+      {currentStep === 2 && (
         <Step3Chunking
           rawText={rawText}
           taskPrompt={taskPrompt}
@@ -485,6 +568,27 @@ export default function BulkQueryApp() {
         />
       )}
 
+      {/* Step 3: Task / Sequential Copy */}
+      {currentStep === 3 && subStep === '3a' && (
+        <Step1TaskDefinition
+          taskPrompt={taskPrompt}
+          setTaskPrompt={setTaskPrompt}
+          savedTemplates={savedTemplates}
+          setSavedTemplates={setSavedTemplates}
+          showToast={showToast}
+          onProceedToProcess={goToProcessing}
+        />
+      )}
+
+      {currentStep === 3 && subStep === '3b' && (
+        <Step3SequentialCopy
+          chunks={chunks}
+          onBack={prevStep}
+          showToast={showToast}
+        />
+      )}
+
+      {/* Step 4: Process & Export (optional) */}
       {currentStep === 4 && (
         <Step4Processing
           chunks={chunks}

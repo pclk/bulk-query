@@ -37,7 +37,8 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json({ success: true }, { status: 201 });
-  } catch {
+  } catch (error) {
+    console.error('[register] Error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

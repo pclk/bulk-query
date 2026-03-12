@@ -24,7 +24,8 @@ export async function GET(
     }
 
     return NextResponse.json({ project });
-  } catch {
+  } catch (error) {
+    console.error('[projects/id] Error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -63,7 +64,8 @@ export async function PUT(
     });
 
     return NextResponse.json({ project });
-  } catch {
+  } catch (error) {
+    console.error('[projects/id] Error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -91,7 +93,8 @@ export async function DELETE(
     await prisma.project.delete({ where: { id: params.id } });
 
     return NextResponse.json({ success: true });
-  } catch {
+  } catch (error) {
+    console.error('[projects/id] Error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
